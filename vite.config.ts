@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve((process as any).cwd(), '.'),
       },
     },
     // Polyfill process.env for the Gemini SDK and Firebase config

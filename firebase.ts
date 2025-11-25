@@ -18,23 +18,10 @@ const getEnvVar = (key: string) => {
 };
 
 // ------------------------------------------------------------------
-// CONFIGURATION INSTRUCTIONS
-// ------------------------------------------------------------------
-// 1. Go to Firebase Console > Project Settings > General
-// 2. Scroll to "Your apps" and select the Web app (</>)
-// 3. Copy the "firebaseConfig" object properties
-// 4. Paste them below into `manualConfig` OR set up your .env file
+// CONFIGURATION
 // ------------------------------------------------------------------
 
-const manualConfig = {
-  apiKey: "AIzaSyBIUT0mFU1THhZIE1yfNbT6ULdpHg8gOlU",
-  authDomain: "bunnytrack-app.firebaseapp.com",
-  projectId: "bunnytrack-app",
-  storageBucket: "bunnytrack-app.firebasestorage.app",
-  messagingSenderId: "550171679504",
-  appId: "1:550171679504:web:ff991001c014dbe34e2395"
-};
-
+// 1. Priority: Environment Variables (from .env file)
 const envConfig = {
   apiKey: getEnvVar("VITE_FIREBASE_API_KEY") || getEnvVar("REACT_APP_FIREBASE_API_KEY"),
   authDomain: getEnvVar("VITE_FIREBASE_AUTH_DOMAIN") || getEnvVar("REACT_APP_FIREBASE_AUTH_DOMAIN"),
@@ -44,8 +31,27 @@ const envConfig = {
   appId: getEnvVar("VITE_FIREBASE_APP_ID") || getEnvVar("REACT_APP_FIREBASE_APP_ID")
 };
 
-// Use Environment variables if they exist, otherwise fallback to manualConfig
+// 2. Fallback: Manual Object (Only used if Env Vars are missing)
+// We set these to placeholders so the validation logic triggers 
+// instead of trying to connect to a non-existent domain (which causes timeouts).
+const manualConfig = {
+  apiKey: "REPLACE_WITH_YOUR_API_KEY",
+  authDomain: "REPLACE_WITH_YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "REPLACE_WITH_YOUR_PROJECT_ID",
+  storageBucket: "REPLACE_WITH_YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "SENDER_ID",
+  appId: "APP_ID"
+};
+
+// Select Config
 const firebaseConfig = envConfig.apiKey ? envConfig : manualConfig;
+
+// Debugging
+if (envConfig.apiKey) {
+  console.log("[Firebase Setup] Successfully loaded configuration from Environment Variables.");
+} else {
+  console.log("[Firebase Setup] Environment variables missing. Falling back to manualConfig.");
+}
 
 // Validation Check
 if (firebaseConfig.apiKey === "REPLACE_WITH_YOUR_API_KEY") {
@@ -54,8 +60,10 @@ if (firebaseConfig.apiKey === "REPLACE_WITH_YOUR_API_KEY") {
     "background: red; color: white; font-size: 20px; font-weight: bold;"
   );
   console.error(
-    "You have not configured your Firebase keys in firebase.ts.\n" +
-    "Please open firebase.ts and fill in the manualConfig object with your project details."
+    "You have not configured your Firebase keys.\n" +
+    "1. Create a .env file with VITE_FIREBASE_API_KEY, etc.\n" +
+    "2. OR edit firebase.ts manually.\n" +
+    "3. Restart your dev server (npm run dev)."
   );
 }
 
@@ -65,7 +73,6 @@ const app = !firebase.apps.length ? firebase.initializeApp(firebaseConfig) : fir
 // Debug helper for Authorized Domains
 if (typeof window !== 'undefined') {
   console.log(`[Firebase Setup] Current Hostname: ${window.location.hostname}`);
-  console.log(`[Firebase Setup] Current Protocol: ${window.location.protocol}`);
 }
 
 export const auth = firebase.auth();

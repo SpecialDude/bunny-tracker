@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Rabbit, AlertTriangle, ExternalLink, Info } from 'lucide-react';
+import { Rabbit, AlertTriangle, ExternalLink, Info, PlayCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 export const Login: React.FC = () => {
-  const { signInWithGoogle } = useAuth();
+  const { signInWithGoogle, enterDemoMode } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [isEnvironmentError, setIsEnvironmentError] = useState(false);
   const [isBlob, setIsBlob] = useState(false);
@@ -31,7 +31,7 @@ export const Login: React.FC = () => {
     } catch (err: any) {
       console.error("Login failed:", err);
       if (err.code === 'auth/api-key-not-valid.-please-pass-a-valid-api-key.') {
-        setError("Configuration Error: Firebase API Key is missing. Please update firebase.ts with your project keys.");
+        setError("Configuration Error: Firebase API Key is missing. Please check your .env file or firebase.ts.");
       } else if (err.code === 'auth/popup-closed-by-user') {
         setError("Sign-in cancelled by user.");
       } else if (err.code === 'auth/unauthorized-domain') {
@@ -132,11 +132,18 @@ export const Login: React.FC = () => {
               Sign In
             </button>
           </form>
-        </div>
 
-        <p className="text-center text-sm text-gray-400">
-          By signing in, you agree to our Terms of Service and Privacy Policy.
-        </p>
+          {/* Demo Mode Link */}
+          <div className="pt-4 border-t border-gray-100">
+             <button 
+               onClick={enterDemoMode}
+               className="w-full flex items-center justify-center gap-2 text-sm text-gray-500 hover:text-farm-600 transition-colors"
+             >
+               <PlayCircle size={16} />
+               Just testing? Enter Demo Mode (No Setup Required)
+             </button>
+          </div>
+        </div>
       </div>
     </div>
   );
