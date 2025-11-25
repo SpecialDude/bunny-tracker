@@ -3,6 +3,9 @@ import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
 import { RabbitList } from './components/RabbitList';
 import { HutchList } from './components/HutchList';
+import { BreedingList } from './components/BreedingList';
+import { FinanceList } from './components/FinanceList';
+import { Settings } from './components/Settings';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Login } from './components/Login';
 import { Loader2 } from 'lucide-react';
@@ -37,9 +40,9 @@ const AppContent = () => {
       case 'dashboard': return <Dashboard />;
       case 'rabbits': return <RabbitList />;
       case 'hutches': return <HutchList />;
-      case 'breeding': return <Placeholder title="Breeding Workflow" />;
-      case 'finances': return <Placeholder title="Financial Tracking" />;
-      case 'settings': return <Placeholder title="Farm Settings" />;
+      case 'breeding': return <BreedingList />;
+      case 'finances': return <FinanceList />;
+      case 'settings': return <Settings />;
       default: return <Dashboard />;
     }
   };

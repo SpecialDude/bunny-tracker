@@ -18,6 +18,13 @@ export enum TransactionType {
   Expense = 'Expense'
 }
 
+export enum CrossingStatus {
+  Pending = 'Pending',          // Just mated
+  Pregnant = 'Pregnant',        // Palpation Confirmed
+  Failed = 'Failed',            // Palpation Negative
+  Delivered = 'Delivered'       // Kits born
+}
+
 // Data Models
 export interface Farm {
   farmId: string;
@@ -27,7 +34,8 @@ export interface Farm {
   currency: string;
   defaultGestationDays: number;
   defaultWeaningDays: number;
-  createdAt: any; // Firestore Timestamp
+  defaultPalpationDays: number;
+  createdAt: any; 
 }
 
 export interface Hutch {
@@ -48,7 +56,7 @@ export interface Rabbit {
   name?: string;
   breed: string;
   sex: Sex;
-  dateOfBirth: string; // ISO String for frontend
+  dateOfBirth: string; // ISO String
   dateOfAcquisition?: string;
   source: 'Born' | 'Purchased';
   purchaseCost?: number;
@@ -56,8 +64,8 @@ export interface Rabbit {
   currentHutchId: string | null;
   pictureUrl?: string;
   parentage: {
-    sireId?: string; // Tag or ID
-    doeId?: string;  // Tag or ID
+    sireId?: string; // Tag 
+    doeId?: string;  // Tag 
   };
   notes: string;
   farmId: string;
@@ -65,11 +73,30 @@ export interface Rabbit {
 
 export interface Crossing {
   id?: string;
+  doeId: string;    // Tag
+  sireId: string;   // Tag
+  doeName?: string; // Cache for display
+  sireName?: string;// Cache for display
+  dateOfCrossing: string;
+  expectedPalpationDate: string;
+  palpationResult?: 'Positive' | 'Negative' | 'Pending';
+  expectedDeliveryDate: string;
+  actualDeliveryDate?: string;
+  status: CrossingStatus;
+  notes?: string;
+  farmId: string;
+}
+
+export interface Delivery {
+  id?: string;
+  crossingId: string;
   doeId: string;
   sireId: string;
-  dateOfCrossing: string;
-  expectedDeliveryDate: string;
-  status: 'Pending' | 'Confirmed' | 'Delivered' | 'Failed';
+  dateOfDelivery: string;
+  kitsBorn: number;
+  kitsLive: number;
+  kitIds?: string[]; // IDs of created rabbit records
+  notes?: string;
   farmId: string;
 }
 
@@ -81,6 +108,17 @@ export interface Transaction {
   date: string;
   relatedId?: string; // ID of sold rabbit or medication
   notes: string;
+  farmId: string;
+}
+
+export interface Sale {
+  id?: string;
+  saleId: string;
+  rabbitIds: string[]; // List of tags/IDs sold
+  buyerName: string;
+  amount: number;
+  date: string;
+  notes?: string;
   farmId: string;
 }
 
