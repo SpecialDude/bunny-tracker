@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
 import { RabbitList } from './components/RabbitList';
+import { HutchList } from './components/HutchList';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Login } from './components/Login';
 import { Loader2 } from 'lucide-react';
@@ -35,7 +36,7 @@ const AppContent = () => {
     switch (activePage) {
       case 'dashboard': return <Dashboard />;
       case 'rabbits': return <RabbitList />;
-      case 'hutches': return <Placeholder title="Hutch Management" />;
+      case 'hutches': return <HutchList />;
       case 'breeding': return <Placeholder title="Breeding Workflow" />;
       case 'finances': return <Placeholder title="Financial Tracking" />;
       case 'settings': return <Placeholder title="Farm Settings" />;

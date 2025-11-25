@@ -49,12 +49,15 @@ export interface Rabbit {
   breed: string;
   sex: Sex;
   dateOfBirth: string; // ISO String for frontend
+  dateOfAcquisition?: string;
+  source: 'Born' | 'Purchased';
+  purchaseCost?: number;
   status: RabbitStatus;
   currentHutchId: string | null;
   pictureUrl?: string;
   parentage: {
-    sireId?: string;
-    doeId?: string;
+    sireId?: string; // Tag or ID
+    doeId?: string;  // Tag or ID
   };
   notes: string;
   farmId: string;

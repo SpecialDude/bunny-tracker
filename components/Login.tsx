@@ -122,11 +122,11 @@ export const Login: React.FC = () => {
           <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Email address</label>
-              <input type="email" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 focus:outline-none" placeholder="farmer@example.com" />
+              <input type="email" className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 focus:outline-none" placeholder="farmer@example.com" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-              <input type="password" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 focus:outline-none" placeholder="••••••••" />
+              <input type="password" className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 focus:outline-none" placeholder="••••••••" />
             </div>
             <button className="w-full py-3 bg-farm-600 hover:bg-farm-700 text-white rounded-lg font-bold shadow-md transition-colors">
               Sign In

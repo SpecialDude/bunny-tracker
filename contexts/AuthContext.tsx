@@ -21,7 +21,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Compat SDK: auth is an object with methods
+    // Listen for real Firebase Auth state changes
     const unsubscribe = auth.onAuthStateChanged((currentUser) => {
       setUser(currentUser);
       setLoading(false);
@@ -30,23 +30,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signInWithGoogle = async () => {
-    // Explicitly try to set persistence to LOCAL before signing in
-    // This helps in some environments where session persistence is default but flaky
     try {
-      await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
-    } catch (e) {
-      console.warn("Could not set auth persistence:", e);
+      await auth.signInWithPopup(googleProvider);
+    } catch (error) {
+      console.error("Error signing in with Google:", error);
+      throw error;
     }
-
-    // We intentionally do not catch errors here so the component can handle UI feedback
-    await auth.signInWithPopup(googleProvider);
   };
 
   const logout = async () => {
     try {
       await auth.signOut();
     } catch (error) {
-      console.error("Error signing out", error);
+      console.error("Error signing out:", error);
     }
   };
 

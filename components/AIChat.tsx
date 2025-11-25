@@ -170,7 +170,7 @@ export const AIChat: React.FC = () => {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder={mode === 'assistant' ? "Ask about your rabbits..." : "Search rabbit prices..."}
-            className="flex-1 px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-farm-500 text-sm"
+            className="flex-1 px-4 py-2 bg-white border rounded-full focus:outline-none focus:ring-2 focus:ring-farm-500 text-sm"
           />
           <button
             onClick={handleSend}
