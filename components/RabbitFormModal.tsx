@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Wand2, DollarSign, Baby, ShoppingBag } from 'lucide-react';
+import { X, Save, Wand2, DollarSign, Baby, ShoppingBag, AlertTriangle, ArrowUpCircle } from 'lucide-react';
 import { Rabbit, RabbitStatus, Sex, Hutch, Crossing, CrossingStatus } from '../types';
 import { FarmService } from '../services/farmService';
 
@@ -40,6 +40,9 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
   const [kitCount, setKitCount] = useState(1);
   const [selectedLitterId, setSelectedLitterId] = useState('');
 
+  // Capacity Check State
+  const [expandCapacity, setExpandCapacity] = useState(false);
+
   useEffect(() => {
     if (isOpen) {
       // Load available hutches
@@ -76,6 +79,7 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
         setSelectedLitterId('');
         setActiveTab('Born');
       }
+      setExpandCapacity(false);
     }
   }, [initialData, isOpen]);
 
@@ -107,10 +111,46 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
     setFormData(prev => ({ ...prev, tag }));
   };
 
+  // Capacity Logic
+  const getSelectedHutch = () => hutches.find(h => h.hutchId === formData.currentHutchId);
+  
+  const getRequiredCapacity = () => {
+    // If editing and keeping same hutch, we aren't adding net new occupancy (conceptually)
+    if (initialData && initialData.currentHutchId === formData.currentHutchId) return 0;
+    // Otherwise we are adding 1 or N kits
+    return (!initialData && activeTab === 'Born') ? kitCount : 1;
+  };
+
+  const isHutchFull = () => {
+    const hutch = getSelectedHutch();
+    if (!hutch) return false;
+    
+    const required = getRequiredCapacity();
+    if (required === 0) return false;
+
+    return (hutch.currentOccupancy + required) > hutch.capacity;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+
     try {
+      // Validation: Check Capacity
+      if (isHutchFull()) {
+        const hutch = getSelectedHutch();
+        if (!expandCapacity) {
+          alert(`Hutch ${hutch?.label} is full. Please select another hutch or check "Increase capacity" to proceed.`);
+          setLoading(false);
+          return;
+        } else if (hutch && hutch.id) {
+          // Increase capacity
+          const required = getRequiredCapacity();
+          const newCapacity = Math.max(hutch.capacity + 1, hutch.currentOccupancy + required);
+          await FarmService.updateHutch(hutch.id, { capacity: newCapacity });
+        }
+      }
+
       const isPurchase = activeTab === 'Purchased';
       
       const payload = {
@@ -136,6 +176,9 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
   };
 
   if (!isOpen) return null;
+
+  const hutchIsFull = isHutchFull();
+  const selectedHutch = getSelectedHutch();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -351,8 +394,13 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
                 <label className="block text-sm font-medium text-gray-700 mb-1">Current Hutch</label>
                 <select 
                   value={formData.currentHutchId || ''}
-                  onChange={e => setFormData({...formData, currentHutchId: e.target.value})}
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-farm-500 outline-none"
+                  onChange={e => {
+                    setFormData({...formData, currentHutchId: e.target.value});
+                    setExpandCapacity(false); // Reset check when changing hutch
+                  }}
+                  className={`w-full px-3 py-2 bg-white border rounded-lg text-sm focus:ring-2 outline-none ${
+                    hutchIsFull ? 'border-red-300 focus:ring-red-200' : 'border-gray-300 focus:ring-farm-500'
+                  }`}
                 >
                   <option value="">-- Unassigned --</option>
                   {hutches.map(h => (
@@ -361,6 +409,31 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
                     </option>
                   ))}
                 </select>
+                
+                {/* Warning and Override */}
+                {hutchIsFull && selectedHutch && (
+                   <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                      <div className="flex items-start gap-2 text-red-700 text-xs mb-2">
+                        <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                        <span>
+                          <strong>Hutch Full:</strong> Capacity is {selectedHutch.capacity}. 
+                          Adding {getRequiredCapacity()} will raise occupancy to {selectedHutch.currentOccupancy + getRequiredCapacity()}.
+                        </span>
+                      </div>
+                      <label className="flex items-center gap-2 cursor-pointer group">
+                        <input 
+                           type="checkbox"
+                           checked={expandCapacity}
+                           onChange={e => setExpandCapacity(e.target.checked)}
+                           className="text-red-600 focus:ring-red-500 rounded"
+                        />
+                        <span className="text-xs font-medium text-red-700 group-hover:text-red-800 flex items-center gap-1">
+                           <ArrowUpCircle size={12} />
+                           Increase capacity by 1 (to {Math.max(selectedHutch.capacity + 1, selectedHutch.currentOccupancy + getRequiredCapacity())})
+                        </span>
+                      </label>
+                   </div>
+                )}
               </div>
             </div>
             
