@@ -41,17 +41,32 @@ const getFarmId = () => {
 // Helper to convert Firestore timestamp to ISO date string
 const convertDoc = (doc: any): any => {
   const data = doc.data();
-  return {
+  const result = {
     id: doc.id,
     ...data,
-    dateOfBirth: data.dateOfBirth?.toDate ? data.dateOfBirth.toDate().toISOString().split('T')[0] : data.dateOfBirth,
-    dateOfAcquisition: data.dateOfAcquisition?.toDate ? data.dateOfAcquisition.toDate().toISOString().split('T')[0] : data.dateOfAcquisition,
-    dateOfCrossing: data.dateOfCrossing?.toDate ? data.dateOfCrossing.toDate().toISOString().split('T')[0] : data.dateOfCrossing,
-    expectedDeliveryDate: data.expectedDeliveryDate?.toDate ? data.expectedDeliveryDate.toDate().toISOString().split('T')[0] : data.expectedDeliveryDate,
-    expectedPalpationDate: data.expectedPalpationDate?.toDate ? data.expectedPalpationDate.toDate().toISOString().split('T')[0] : data.expectedPalpationDate,
-    date: data.date?.toDate ? data.date.toDate().toISOString().split('T')[0] : data.date,
-    createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
   };
+
+  // Convert timestamps to ISO strings only if they exist
+  const dateFields = [
+    'dateOfBirth', 
+    'dateOfAcquisition', 
+    'dateOfCrossing', 
+    'expectedDeliveryDate', 
+    'expectedPalpationDate', 
+    'date'
+  ];
+
+  dateFields.forEach(field => {
+    if (result[field] && typeof result[field].toDate === 'function') {
+      result[field] = result[field].toDate().toISOString().split('T')[0];
+    }
+  });
+
+  if (result.createdAt && typeof result.createdAt.toDate === 'function') {
+    result.createdAt = result.createdAt.toDate();
+  }
+  
+  return result;
 };
 
 export const FarmService = {
