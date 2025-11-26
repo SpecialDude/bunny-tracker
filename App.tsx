@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
 import { RabbitList } from './components/RabbitList';
@@ -6,33 +6,58 @@ import { HutchList } from './components/HutchList';
 import { BreedingList } from './components/BreedingList';
 import { FinanceList } from './components/FinanceList';
 import { Settings } from './components/Settings';
+import { Onboarding } from './components/Onboarding';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Login } from './components/Login';
 import { Loader2 } from 'lucide-react';
-
-// Placeholder components
-const Placeholder = ({ title }: { title: string }) => (
-  <div className="flex flex-col items-center justify-center h-96 text-gray-400">
-    <div className="text-6xl mb-4">🚧</div>
-    <h2 className="text-2xl font-bold text-gray-600">{title}</h2>
-    <p>This module is under construction.</p>
-  </div>
-);
+import { FarmService } from './services/farmService';
 
 const AppContent = () => {
   const [activePage, setActivePage] = useState('dashboard');
-  const { user, loading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  
+  // Farm check state
+  const [hasFarm, setHasFarm] = useState<boolean | null>(null);
+  const [checkingFarm, setCheckingFarm] = useState(false);
 
-  if (loading) {
+  useEffect(() => {
+    const checkFarmStatus = async () => {
+      if (!user) return;
+      setCheckingFarm(true);
+      try {
+        const farm = await FarmService.getFarm();
+        setHasFarm(!!farm);
+      } catch (error) {
+        console.error("Error checking farm status:", error);
+        setHasFarm(false);
+      } finally {
+        setCheckingFarm(false);
+      }
+    };
+
+    if (user) {
+      checkFarmStatus();
+    }
+  }, [user]);
+
+  if (authLoading || (user && checkingFarm)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Loader2 className="animate-spin text-farm-600" size={48} />
+        <div className="flex flex-col items-center gap-4">
+           <Loader2 className="animate-spin text-farm-600" size={48} />
+           <p className="text-gray-500 font-medium">Loading your farm...</p>
+        </div>
       </div>
     );
   }
 
   if (!user) {
     return <Login />;
+  }
+
+  // If user is logged in but hasn't set up a farm yet
+  if (hasFarm === false) {
+    return <Onboarding onComplete={() => setHasFarm(true)} />;
   }
 
   const renderContent = () => {

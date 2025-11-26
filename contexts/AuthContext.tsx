@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, googleProvider } from '../firebase';
+import { FarmService } from '../services/farmService';
 
 // Types
 type User = firebase.User;
@@ -9,6 +10,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
+  enterDemoMode: () => void;
   logout: () => Promise<void>;
 }
 
@@ -24,19 +26,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const DEV_MODE_NO_AUTH = false;
 
   useEffect(() => {
-    if (DEV_MODE_NO_AUTH) {
-      // Mock User
-      setUser({
-        uid: 'dev-owner-123',
-        email: 'dev@sunnyrabbits.com',
-        displayName: 'Dev Farmer',
-        photoURL: null
-      } as any);
-      setLoading(false);
-      return;
-    }
-
-    // Real Firebase Auth
+    // Real Firebase Auth Listener
     const unsubscribe = auth.onAuthStateChanged((currentUser) => {
       setUser(currentUser);
       setLoading(false);
@@ -45,29 +35,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signInWithGoogle = async () => {
-    if (DEV_MODE_NO_AUTH) return;
     try {
-      await auth.signInWithPopup(googleProvider);
+      const result = await auth.signInWithPopup(googleProvider);
+      if (result.user) {
+        // Sync user details to Firestore
+        await FarmService.syncUser(result.user);
+      }
     } catch (error) {
       console.error("Error signing in with Google:", error);
       throw error;
     }
   };
 
+  const enterDemoMode = () => {
+      // Mock User for Demo
+      setUser(null); // Ensure no real auth
+      // We handle demo logic in services based on null auth
+      // But to trigger UI updates we might need a dummy object if strictly typed elsewhere
+      // For now, let's keep user null and use a separate flag or specific mock logic in components
+      // Actually, to make the Layout render, we need a Mock User object.
+      
+      const mockUser = {
+        uid: 'demo-user-123',
+        email: 'demo@bunnytrack.com',
+        displayName: 'Demo Farmer',
+        photoURL: null,
+        emailVerified: true,
+        isAnonymous: true,
+        // ... add other minimal properties needed by firebase.User type casting
+      } as unknown as User;
+
+      setUser(mockUser);
+  };
+
   const logout = async () => {
-    if (DEV_MODE_NO_AUTH) {
-      window.location.reload(); 
-      return;
-    }
     try {
       await auth.signOut();
+      setUser(null);
     } catch (error) {
       console.error("Error signing out:", error);
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle, logout }}>
+    <AuthContext.Provider value={{ user, loading, signInWithGoogle, enterDemoMode, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Menu, X, Home, Rabbit, Warehouse, Activity, DollarSign, Settings, LogOut, Bell } from 'lucide-react';
+import { Menu, Home, Rabbit, Warehouse, Activity, DollarSign, Settings, LogOut, Bell } from 'lucide-react';
 import { AIChat } from './AIChat';
+import { useAuth } from '../contexts/AuthContext';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -9,6 +10,7 @@ interface LayoutProps {
 }
 
 export const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate }) => {
+  const { user, logout } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const navItems = [
@@ -19,6 +21,12 @@ export const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate
     { id: 'finances', label: 'Finances', icon: DollarSign },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
+
+  // Helper to get initials
+  const getInitials = () => {
+    if (!user?.displayName) return 'U';
+    return user.displayName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -66,7 +74,10 @@ export const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate
           </nav>
 
           <div className="p-4 border-t border-gray-100">
-            <button className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+            <button 
+              onClick={logout}
+              className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            >
               <LogOut size={20} />
               Sign Out
             </button>
@@ -91,10 +102,16 @@ export const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate
               <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
             </button>
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-farm-100 border border-farm-200 flex items-center justify-center text-farm-700 font-bold text-sm">
-                JD
+              <div className="w-8 h-8 rounded-full bg-farm-100 border border-farm-200 flex items-center justify-center text-farm-700 font-bold text-sm overflow-hidden">
+                {user?.photoURL ? (
+                  <img src={user.photoURL} alt="User" className="w-full h-full object-cover" />
+                ) : (
+                  getInitials()
+                )}
               </div>
-              <span className="text-sm font-medium text-gray-700 hidden md:block">John Doe</span>
+              <span className="text-sm font-medium text-gray-700 hidden md:block">
+                {user?.displayName || user?.email || 'Farmer'}
+              </span>
             </div>
           </div>
         </header>

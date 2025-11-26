@@ -1,5 +1,5 @@
 import { db, auth } from '../firebase';
-import { Rabbit, RabbitStatus, Sex, Transaction, TransactionType, Hutch, Crossing, CrossingStatus, Delivery, Sale, Farm } from '../types';
+import { Rabbit, RabbitStatus, Sex, Transaction, TransactionType, Hutch, Crossing, CrossingStatus, Delivery, Sale, Farm, UserProfile } from '../types';
 
 // Default Settings Fallback
 const DEFAULT_SETTINGS = {
@@ -8,8 +8,25 @@ const DEFAULT_SETTINGS = {
   weaningDays: 35
 };
 
+// --- MOCK STORAGE FOR DEMO MODE ---
+// If the user is in "Demo Mode", we use this in-memory store instead of Firestore
+let MOCK_STORE: any = {
+  farms: {},
+  rabbits: [],
+  hutches: [],
+  transactions: [],
+  crossings: []
+};
+
+// Check if we are in Demo Mode (auth.currentUser is null but we proceeded)
+// OR if using the explicit mock flag
+const isDemoMode = () => {
+  return !auth.currentUser; // Simple check: If no firebase user, assume demo
+};
+
 // Helper to get current authenticated user ID
 const getUserId = () => {
+  if (isDemoMode()) return 'demo-user-123';
   if (!auth.currentUser) {
     throw new Error("User must be logged in to access farm data.");
   }
@@ -17,7 +34,6 @@ const getUserId = () => {
 };
 
 // Helper to get the Farm ID for the current user
-// This ensures multi-tenancy: each user gets their own farm document space.
 const getFarmId = () => {
   return `farm-${getUserId()}`;
 };
@@ -39,36 +55,91 @@ const convertDoc = (doc: any): any => {
 };
 
 export const FarmService = {
-  // --- Farm Settings ---
+  // --- User & Onboarding ---
 
-  async getFarmSettings(): Promise<Farm> {
+  async syncUser(user: any): Promise<void> {
+    if (isDemoMode()) return;
     try {
-      const farmId = getFarmId();
-      const doc = await db.collection('farms').doc(farmId).get();
-      
-      if (doc.exists) {
-        return convertDoc(doc) as Farm;
-      } else {
-        // Return defaults if not set up (Lazy Initialization)
-        return {
-          farmId: farmId,
-          name: 'My Rabbit Farm',
-          ownerUid: getUserId(),
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          currency: 'USD',
-          defaultGestationDays: DEFAULT_SETTINGS.gestationDays,
-          defaultWeaningDays: DEFAULT_SETTINGS.weaningDays,
-          defaultPalpationDays: DEFAULT_SETTINGS.palpationDays,
-          createdAt: new Date()
-        };
-      }
-    } catch (error) {
-      console.error("Error fetching settings:", error);
-      throw error;
+      const userRef = db.collection('users').doc(user.uid);
+      const payload: UserProfile = {
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        lastLogin: new Date().toISOString()
+      };
+      await userRef.set(payload, { merge: true });
+    } catch (e) {
+      console.error("Failed to sync user profile:", e);
     }
   },
 
+  async getFarm(): Promise<Farm | null> {
+    if (isDemoMode()) {
+       // Return a mock farm so demo mode skips onboarding
+       return {
+         farmId: 'farm-demo',
+         name: 'Demo Rabbitry',
+         ownerUid: 'demo-user-123',
+         timezone: 'UTC',
+         currency: 'USD',
+         defaultGestationDays: 31,
+         defaultWeaningDays: 35,
+         defaultPalpationDays: 14,
+         createdAt: new Date()
+       };
+    }
+
+    const farmId = getFarmId();
+    const doc = await db.collection('farms').doc(farmId).get();
+    if (doc.exists) {
+      return convertDoc(doc) as Farm;
+    }
+    return null;
+  },
+
+  async createFarm(settings: { name: string, currency: string, timezone: string }): Promise<void> {
+    const userId = getUserId();
+    const farmId = getFarmId();
+    
+    if (isDemoMode()) return; // Should not happen in demo flow really
+
+    await db.collection('farms').doc(farmId).set({
+      farmId: farmId,
+      ownerUid: userId,
+      name: settings.name,
+      currency: settings.currency,
+      timezone: settings.timezone,
+      defaultGestationDays: DEFAULT_SETTINGS.gestationDays,
+      defaultWeaningDays: DEFAULT_SETTINGS.weaningDays,
+      defaultPalpationDays: DEFAULT_SETTINGS.palpationDays,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+  },
+
+  // --- Farm Settings ---
+
+  async getFarmSettings(): Promise<Farm> {
+    const farm = await this.getFarm();
+    if (farm) return farm;
+
+    // Fallback if accessed before creation (should be handled by Onboarding gate)
+    return {
+      farmId: getFarmId(),
+      name: 'My Rabbit Farm',
+      ownerUid: getUserId(),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      currency: 'USD',
+      defaultGestationDays: DEFAULT_SETTINGS.gestationDays,
+      defaultWeaningDays: DEFAULT_SETTINGS.weaningDays,
+      defaultPalpationDays: DEFAULT_SETTINGS.palpationDays,
+      createdAt: new Date()
+    };
+  },
+
   async updateFarmSettings(settings: Partial<Farm>): Promise<void> {
+    if (isDemoMode()) return;
     const farmId = getFarmId();
     await db.collection('farms').doc(farmId).set({
       ...settings,
@@ -97,6 +168,7 @@ export const FarmService = {
   // --- Rabbits ---
 
   async getRabbits(): Promise<Rabbit[]> {
+    if (isDemoMode()) return MOCK_STORE.rabbits;
     try {
       const farmId = getFarmId();
       const snapshot = await db.collection(`farms/${farmId}/rabbits`)
@@ -110,6 +182,7 @@ export const FarmService = {
   },
 
   async getRabbitsBySex(sex: Sex): Promise<Rabbit[]> {
+    if (isDemoMode()) return MOCK_STORE.rabbits.filter((r: Rabbit) => r.sex === sex);
     try {
       const farmId = getFarmId();
       const snapshot = await db.collection(`farms/${farmId}/rabbits`)
@@ -124,6 +197,7 @@ export const FarmService = {
   },
 
   async getSaleableRabbits(): Promise<Rabbit[]> {
+    if (isDemoMode()) return MOCK_STORE.rabbits.filter((r: Rabbit) => ['Alive', 'Weaned', 'Pregnant'].includes(r.status));
     try {
       const farmId = getFarmId();
       const snapshot = await db.collection(`farms/${farmId}/rabbits`)
@@ -143,8 +217,24 @@ export const FarmService = {
   ): Promise<void> {
     const userId = getUserId();
     const farmId = getFarmId();
-    const batch = db.batch();
     const timestamp = new Date();
+
+    if (isDemoMode()) {
+        for (let i = 0; i < kitCount; i++) {
+            const id = 'mock-rabbit-' + Math.random();
+            MOCK_STORE.rabbits.push({
+                ...rabbitData,
+                id,
+                rabbitId: id,
+                farmId,
+                tag: kitCount > 1 ? `${rabbitData.tag}-${i+1}` : rabbitData.tag,
+                createdAt: timestamp
+            });
+        }
+        return;
+    }
+
+    const batch = db.batch();
 
     for (let i = 0; i < kitCount; i++) {
       const newRabbitRef = db.collection(`farms/${farmId}/rabbits`).doc();
@@ -189,6 +279,11 @@ export const FarmService = {
   },
 
   async updateRabbit(id: string, updates: Partial<Rabbit>): Promise<void> {
+    if (isDemoMode()) {
+        const idx = MOCK_STORE.rabbits.findIndex((r: Rabbit) => r.id === id);
+        if (idx !== -1) MOCK_STORE.rabbits[idx] = { ...MOCK_STORE.rabbits[idx], ...updates };
+        return;
+    }
     const farmId = getFarmId();
     await db.collection(`farms/${farmId}/rabbits`).doc(id).update({
       ...updates,
@@ -197,6 +292,10 @@ export const FarmService = {
   },
 
   async generateNextTag(breedCode: string): Promise<string> {
+    if (isDemoMode()) {
+        const count = MOCK_STORE.rabbits.length + 1;
+        return `SN-${breedCode.substring(0,3).toUpperCase()}-${count.toString().padStart(3,'0')}`;
+    }
     const farmId = getFarmId();
     const snapshot = await db.collection(`farms/${farmId}/rabbits`).get();
     const count = snapshot.size + 1;
@@ -207,6 +306,7 @@ export const FarmService = {
   // --- Hutches ---
 
   async getHutches(): Promise<Hutch[]> {
+    if (isDemoMode()) return MOCK_STORE.hutches;
     const farmId = getFarmId();
     const snapshot = await db.collection(`farms/${farmId}/hutches`)
       .orderBy('number', 'asc')
@@ -215,6 +315,11 @@ export const FarmService = {
   },
 
   async addHutch(data: Omit<Hutch, 'id' | 'farmId' | 'currentOccupancy'>): Promise<void> {
+    if (isDemoMode()) {
+        const id = 'mock-hutch-' + Math.random();
+        MOCK_STORE.hutches.push({ ...data, id, hutchId: `H${data.number}`, currentOccupancy: 0, farmId: 'demo' });
+        return;
+    }
     const userId = getUserId();
     const farmId = getFarmId();
     const docRef = db.collection(`farms/${farmId}/hutches`).doc();
@@ -233,6 +338,7 @@ export const FarmService = {
   },
 
   async updateHutch(id: string, updates: Partial<Hutch>): Promise<void> {
+    if (isDemoMode()) return;
     const farmId = getFarmId();
     await db.collection(`farms/${farmId}/hutches`).doc(id).update({
       ...updates,
@@ -243,6 +349,7 @@ export const FarmService = {
   // --- Breeding & Deliveries ---
 
   async getCrossings(): Promise<Crossing[]> {
+    if (isDemoMode()) return MOCK_STORE.crossings;
     const farmId = getFarmId();
     const snapshot = await db.collection(`farms/${farmId}/crossings`)
       .orderBy('dateOfCrossing', 'desc')
@@ -251,6 +358,14 @@ export const FarmService = {
   },
 
   async addCrossing(data: Omit<Crossing, 'id' | 'farmId' | 'status' | 'expectedDeliveryDate' | 'expectedPalpationDate'>): Promise<void> {
+    if (isDemoMode()) {
+        MOCK_STORE.crossings.push({
+            ...data, id: 'mock-cross-'+Math.random(), status: CrossingStatus.Pending, 
+            expectedPalpationDate: new Date().toISOString(), expectedDeliveryDate: new Date().toISOString()
+        });
+        return;
+    }
+
     const userId = getUserId();
     const farmId = getFarmId();
     const docRef = db.collection(`farms/${farmId}/crossings`).doc();
@@ -283,6 +398,11 @@ export const FarmService = {
   },
 
   async updateCrossingStatus(id: string, status: CrossingStatus, result?: 'Positive' | 'Negative'): Promise<void> {
+    if (isDemoMode()) {
+        const c = MOCK_STORE.crossings.find((x: Crossing) => x.id === id);
+        if (c) { c.status = status; if(result) c.palpationResult = result; }
+        return;
+    }
     const farmId = getFarmId();
     const updateData: any = { status, updatedAt: new Date() };
     if (result) updateData.palpationResult = result;
@@ -312,6 +432,7 @@ export const FarmService = {
   },
 
   async recordDelivery(data: Omit<Delivery, 'id' | 'farmId'>): Promise<void> {
+    if (isDemoMode()) return;
     const userId = getUserId();
     const farmId = getFarmId();
     const batch = db.batch();
@@ -344,6 +465,7 @@ export const FarmService = {
   // --- Finances (Sales & Transactions) ---
 
   async getTransactions(): Promise<Transaction[]> {
+    if (isDemoMode()) return MOCK_STORE.transactions;
     try {
       const farmId = getFarmId();
       const snapshot = await db.collection(`farms/${farmId}/transactions`)
@@ -357,6 +479,10 @@ export const FarmService = {
   },
 
   async addTransaction(data: Omit<Transaction, 'id' | 'farmId'>): Promise<void> {
+    if (isDemoMode()) {
+        MOCK_STORE.transactions.push({ ...data, id: 'mock-txn-'+Math.random(), farmId: 'demo' });
+        return;
+    }
     const userId = getUserId();
     const farmId = getFarmId();
     const docRef = db.collection(`farms/${farmId}/transactions`).doc();
@@ -372,6 +498,14 @@ export const FarmService = {
   },
 
   async recordSale(data: Omit<Sale, 'id' | 'farmId' | 'saleId'>): Promise<void> {
+    if (isDemoMode()) {
+        const saleId = 'S-'+Math.random();
+        MOCK_STORE.transactions.push({ 
+            type: TransactionType.Income, category: 'Sale', amount: data.amount, date: data.date, notes: 'Mock Sale', farmId: 'demo'
+        });
+        return;
+    }
+
     const userId = getUserId();
     const farmId = getFarmId();
     const batch = db.batch();

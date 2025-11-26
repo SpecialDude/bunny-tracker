@@ -26,6 +26,14 @@ export enum CrossingStatus {
 }
 
 // Data Models
+export interface UserProfile {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+  lastLogin: string;
+}
+
 export interface Farm {
   farmId: string;
   name: string;
