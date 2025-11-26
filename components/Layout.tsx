@@ -14,6 +14,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate
   const { user, logout } = useAuth();
   const { farmName } = useFarm();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [imgError, setImgError] = useState(false);
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
@@ -105,8 +106,14 @@ export const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate
             </button>
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-farm-100 border border-farm-200 flex items-center justify-center text-farm-700 font-bold text-sm overflow-hidden">
-                {user?.photoURL ? (
-                  <img src={user.photoURL} alt="User" className="w-full h-full object-cover" />
+                {user?.photoURL && !imgError ? (
+                  <img 
+                    src={user.photoURL} 
+                    alt="User" 
+                    className="w-full h-full object-cover" 
+                    referrerPolicy="no-referrer"
+                    onError={() => setImgError(true)}
+                  />
                 ) : (
                   getInitials()
                 )}
