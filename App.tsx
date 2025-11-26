@@ -9,6 +9,7 @@ import { Settings } from './components/Settings';
 import { Onboarding } from './components/Onboarding';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AlertProvider } from './contexts/AlertContext';
+import { FarmProvider } from './contexts/FarmContext';
 import { Login } from './components/Login';
 import { Loader2 } from 'lucide-react';
 import { FarmService } from './services/farmService';
@@ -84,7 +85,9 @@ function App() {
   return (
     <AuthProvider>
       <AlertProvider>
-        <AppContent />
+        <FarmProvider>
+          <AppContent />
+        </FarmProvider>
       </AlertProvider>
     </AuthProvider>
   );

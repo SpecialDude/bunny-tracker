@@ -3,6 +3,7 @@ import { X, Skull, Utensils } from 'lucide-react';
 import { Rabbit, RabbitStatus } from '../types';
 import { FarmService } from '../services/farmService';
 import { useAlert } from '../contexts/AlertContext';
+import { useFarm } from '../contexts/FarmContext';
 
 interface Props {
   isOpen: boolean;
@@ -13,6 +14,7 @@ interface Props {
 
 export const MortalityModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, rabbit }) => {
   const { showToast } = useAlert();
+  const { currencySymbol } = useFarm();
   const [loading, setLoading] = useState(false);
   const [type, setType] = useState<RabbitStatus.Dead | RabbitStatus.Slaughtered>(RabbitStatus.Dead);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -128,7 +130,7 @@ export const MortalityModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, ra
                    <div>
                      <label className="block text-xs font-medium text-gray-500 mb-1">Sale Amount</label>
                      <div className="relative">
-                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">{currencySymbol}</span>
                        <input 
                          type="number" 
                          min="0"

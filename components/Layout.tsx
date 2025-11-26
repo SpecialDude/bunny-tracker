@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Menu, Home, Rabbit, Warehouse, Activity, DollarSign, Settings, LogOut, Bell } from 'lucide-react';
 import { AIChat } from './AIChat';
 import { useAuth } from '../contexts/AuthContext';
+import { useFarm } from '../contexts/FarmContext';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -11,6 +12,7 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate }) => {
   const { user, logout } = useAuth();
+  const { farmName } = useFarm();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const navItems = [
@@ -46,9 +48,9 @@ export const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate
       `}>
         <div className="h-full flex flex-col">
           <div className="p-6 border-b border-gray-100">
-            <h1 className="text-2xl font-bold text-farm-800 flex items-center gap-2">
-              <Rabbit className="text-farm-500" />
-              BunnyTrack
+            <h1 className="text-xl font-bold text-farm-800 flex items-center gap-2 truncate" title={farmName}>
+              <Rabbit className="text-farm-500 shrink-0" />
+              <span className="truncate">{farmName}</span>
             </h1>
           </div>
 

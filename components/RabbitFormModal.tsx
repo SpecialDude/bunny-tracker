@@ -3,6 +3,7 @@ import { X, Save, Wand2, DollarSign, Baby, ShoppingBag, AlertTriangle, ArrowUpCi
 import { Rabbit, RabbitStatus, Sex, Hutch, Crossing, CrossingStatus } from '../types';
 import { FarmService } from '../services/farmService';
 import { useAlert } from '../contexts/AlertContext';
+import { useFarm } from '../contexts/FarmContext';
 
 interface RabbitFormModalProps {
   isOpen: boolean;
@@ -15,6 +16,7 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
   isOpen, onClose, onSuccess, initialData 
 }) => {
   const { showToast } = useAlert();
+  const { currencySymbol } = useFarm();
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'Born' | 'Purchased'>('Born');
   
@@ -321,13 +323,16 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
                  <div className="grid grid-cols-2 gap-4">
                     <div>
                        <label className="block text-xs font-medium text-gray-500 mb-1">Cost Per Rabbit</label>
-                       <input 
-                         type="number" 
-                         min="0"
-                         value={formData.purchaseCost}
-                         onChange={e => setFormData({...formData, purchaseCost: parseFloat(e.target.value)})}
-                         className="w-full px-3 py-2 bg-white border border-gray-300 rounded text-sm outline-none focus:border-blue-500"
-                       />
+                       <div className="relative">
+                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs">{currencySymbol}</span>
+                         <input 
+                           type="number" 
+                           min="0"
+                           value={formData.purchaseCost}
+                           onChange={e => setFormData({...formData, purchaseCost: parseFloat(e.target.value)})}
+                           className="w-full pl-6 pr-3 py-2 bg-white border border-gray-300 rounded text-sm outline-none focus:border-blue-500"
+                         />
+                       </div>
                     </div>
                     <div>
                        <label className="block text-xs font-medium text-gray-500 mb-1">Acquisition Date</label>

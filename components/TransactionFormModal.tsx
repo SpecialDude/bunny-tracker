@@ -3,6 +3,7 @@ import { X, DollarSign, Save } from 'lucide-react';
 import { FarmService } from '../services/farmService';
 import { TransactionType } from '../types';
 import { useAlert } from '../contexts/AlertContext';
+import { useFarm } from '../contexts/FarmContext';
 
 interface Props {
   isOpen: boolean;
@@ -16,6 +17,7 @@ const CATEGORIES = [
 
 export const TransactionFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
   const { showToast } = useAlert();
+  const { currencySymbol } = useFarm();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     type: TransactionType.Expense,
@@ -113,7 +115,7 @@ export const TransactionFormModal: React.FC<Props> = ({ isOpen, onClose, onSucce
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">{currencySymbol}</span>
                 <input 
                   required
                   type="number" 

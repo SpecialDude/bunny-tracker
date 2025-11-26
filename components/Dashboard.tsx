@@ -9,12 +9,14 @@ import {
 } from 'recharts';
 import { FarmService } from '../services/farmService';
 import { Rabbit, Hutch, Transaction, Crossing, TransactionType, RabbitStatus, CrossingStatus } from '../types';
+import { useFarm } from '../contexts/FarmContext';
 
 interface DashboardProps {
   onNavigate: (page: string) => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
+  const { farmName, currencySymbol } = useFarm();
   const [loading, setLoading] = useState(true);
   
   // Data State
@@ -33,7 +35,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [currencySymbol]); // Re-calculate if currency changes
 
   const fetchDashboardData = async () => {
     try {
@@ -88,7 +90,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     setKpiData([
       { title: 'Total Rabbits', value: totalRabbits.toString(), subtext: 'Active Livestock', icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
       { title: 'Active Pregnancies', value: pregnantCount.toString(), subtext: 'Does Expecting', icon: Baby, color: 'text-pink-600', bg: 'bg-pink-50' },
-      { title: 'Revenue (This Month)', value: `$${monthlyIncome.toLocaleString()}`, subtext: 'Total Income', icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+      { title: 'Revenue (This Month)', value: `${currencySymbol}${monthlyIncome.toLocaleString()}`, subtext: 'Total Income', icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50' },
       { title: 'Occupancy Rate', value: `${occupancyRate}%`, subtext: `${totalOccupancy}/${totalCapacity} Spaces`, icon: Activity, color: 'text-amber-600', bg: 'bg-amber-50' },
     ]);
   };
@@ -183,7 +185,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     return (
       <div className="space-y-6">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Farm Overview</h2>
+          <h2 className="text-2xl font-bold text-gray-900">{farmName} Overview</h2>
           <p className="text-gray-500 text-sm">Welcome to your new farm dashboard.</p>
         </div>
 
@@ -221,7 +223,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Farm Overview</h2>
+          <h2 className="text-2xl font-bold text-gray-900">{farmName} Overview</h2>
           <p className="text-gray-500 text-sm">Real-time performance metrics.</p>
         </div>
         <div className="flex gap-2">
@@ -269,6 +271,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                   <YAxis axisLine={false} tickLine={false} tick={{fill: '#6b7280'}} />
                   <Tooltip 
                     cursor={{fill: '#f9fafb'}}
+                    formatter={(value: number) => [`${currencySymbol}${value}`, '']}
                     contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} 
                   />
                   <Legend />

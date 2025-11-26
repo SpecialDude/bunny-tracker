@@ -4,8 +4,10 @@ import { Transaction, TransactionType } from '../types';
 import { FarmService } from '../services/farmService';
 import { TransactionFormModal } from './TransactionFormModal';
 import { SaleFormModal } from './SaleFormModal';
+import { useFarm } from '../contexts/FarmContext';
 
 export const FinanceList: React.FC = () => {
+  const { currencySymbol } = useFarm();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'All' | 'Income' | 'Expense'>('All');
@@ -76,7 +78,7 @@ export const FinanceList: React.FC = () => {
              <div>
                <p className="text-sm text-gray-500 font-medium">Net Profit</p>
                <h3 className={`text-2xl font-bold mt-1 ${netProfit >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
-                 ${netProfit.toLocaleString()}
+                 {currencySymbol}{netProfit.toLocaleString()}
                </h3>
              </div>
              <div className={`p-2 rounded-lg ${netProfit >= 0 ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
@@ -90,7 +92,7 @@ export const FinanceList: React.FC = () => {
              <div>
                <p className="text-sm text-gray-500 font-medium">Total Income</p>
                <h3 className="text-2xl font-bold text-green-600 mt-1">
-                 +${totalIncome.toLocaleString()}
+                 +{currencySymbol}{totalIncome.toLocaleString()}
                </h3>
              </div>
              <div className="p-2 rounded-lg bg-green-50 text-green-600">
@@ -104,7 +106,7 @@ export const FinanceList: React.FC = () => {
              <div>
                <p className="text-sm text-gray-500 font-medium">Total Expenses</p>
                <h3 className="text-2xl font-bold text-red-600 mt-1">
-                 -${totalExpense.toLocaleString()}
+                 -{currencySymbol}{totalExpense.toLocaleString()}
                </h3>
              </div>
              <div className="p-2 rounded-lg bg-red-50 text-red-600">
@@ -173,7 +175,7 @@ export const FinanceList: React.FC = () => {
                     <td className={`px-6 py-4 text-right font-medium ${
                       txn.type === TransactionType.Income ? 'text-green-600' : 'text-red-600'
                     }`}>
-                      {txn.type === TransactionType.Income ? '+' : '-'}${txn.amount.toFixed(2)}
+                      {txn.type === TransactionType.Income ? '+' : '-'}{currencySymbol}{txn.amount.toFixed(2)}
                     </td>
                   </tr>
                 ))}

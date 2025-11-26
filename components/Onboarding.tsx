@@ -71,15 +71,14 @@ export const Onboarding: React.FC<Props> = ({ onComplete }) => {
                 <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
                   <DollarSign size={16} /> Currency
                 </label>
-                <input
-                  type="text"
-                  required
-                  maxLength={3}
+                <select
                   value={formData.currency}
-                  onChange={e => setFormData({...formData, currency: e.target.value.toUpperCase()})}
-                  className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none uppercase"
-                  placeholder="USD"
-                />
+                  onChange={e => setFormData({...formData, currency: e.target.value})}
+                  className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
+                >
+                  <option value="USD">USD ($)</option>
+                  <option value="NGN">NGN (₦)</option>
+                </select>
               </div>
 
               <div>

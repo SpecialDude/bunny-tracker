@@ -3,6 +3,7 @@ import { X, ShoppingCart, Search, Check } from 'lucide-react';
 import { FarmService } from '../services/farmService';
 import { Rabbit } from '../types';
 import { useAlert } from '../contexts/AlertContext';
+import { useFarm } from '../contexts/FarmContext';
 
 interface Props {
   isOpen: boolean;
@@ -12,6 +13,7 @@ interface Props {
 
 export const SaleFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
   const { showToast } = useAlert();
+  const { currencySymbol } = useFarm();
   const [loading, setLoading] = useState(false);
   const [rabbits, setRabbits] = useState<Rabbit[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -170,7 +172,7 @@ export const SaleFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) =
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Total Sale Amount</label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">{currencySymbol}</span>
                   <input 
                     required
                     type="number" 

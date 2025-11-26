@@ -4,10 +4,12 @@ import { FarmService } from '../services/farmService';
 import { Farm } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
+import { useFarm } from '../contexts/FarmContext';
 
 export const Settings: React.FC = () => {
   const { user } = useAuth();
   const { showToast } = useAlert();
+  const { refreshFarm } = useFarm();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'general' | 'biological' | 'data'>('general');
@@ -36,6 +38,7 @@ export const Settings: React.FC = () => {
     setSaving(true);
     try {
       await FarmService.updateFarmSettings(farmSettings);
+      await refreshFarm(); // Update global context immediately
       showToast("Settings saved successfully", 'success');
     } catch (error) {
       showToast("Failed to save settings", 'error');
@@ -125,15 +128,15 @@ export const Settings: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Currency Symbol</label>
-                  <input
-                    type="text"
-                    maxLength={3}
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
+                  <select
                     value={farmSettings.currency}
                     onChange={(e) => setFarmSettings({ ...farmSettings, currency: e.target.value })}
                     className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
-                    placeholder="USD, NGN, etc."
-                  />
+                  >
+                    <option value="USD">USD ($)</option>
+                    <option value="NGN">NGN (₦)</option>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
