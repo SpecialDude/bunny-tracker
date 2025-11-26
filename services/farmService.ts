@@ -90,10 +90,18 @@ export const FarmService = {
        };
     }
 
-    const farmId = getFarmId();
-    const doc = await db.collection('farms').doc(farmId).get();
-    if (doc.exists) {
-      return convertDoc(doc) as Farm;
+    // Strict check: if no auth, return null immediately
+    if (!auth.currentUser) return null;
+
+    try {
+      const farmId = getFarmId();
+      const doc = await db.collection('farms').doc(farmId).get();
+      if (doc.exists) {
+        return convertDoc(doc) as Farm;
+      }
+    } catch (error: any) {
+      // If permission denied or other error, assume no farm setup yet
+      console.log("Farm check result:", error.code);
     }
     return null;
   },
@@ -273,6 +281,21 @@ export const FarmService = {
           notes: `Purchase of ${kitCount} rabbit(s). Tag start: ${rabbitData.tag}`
         });
       }
+      
+      // Update hutch occupancy if assigned
+      if (rabbitData.currentHutchId) {
+         // Use existing occupancy if possible, but Firestore increment is safer.
+         // For now, simple read-then-write logic for MVP.
+         const hutchSnapshot = await db.collection(`farms/${farmId}/hutches`)
+            .where('hutchId', '==', rabbitData.currentHutchId).get();
+         
+         if (!hutchSnapshot.empty) {
+            const hutchRef = hutchSnapshot.docs[0].ref;
+            batch.update(hutchRef, { 
+                currentOccupancy: (hutchSnapshot.docs[0].data().currentOccupancy || 0) + 1 
+            });
+         }
+      }
     }
 
     await batch.commit();
@@ -344,6 +367,24 @@ export const FarmService = {
       ...updates,
       updatedAt: new Date()
     });
+  },
+
+  async deleteHutch(id: string): Promise<void> {
+    if (isDemoMode()) {
+       MOCK_STORE.hutches = MOCK_STORE.hutches.filter((h: any) => h.id !== id);
+       return;
+    }
+    const farmId = getFarmId();
+    const hutchRef = db.collection(`farms/${farmId}/hutches`).doc(id);
+    const doc = await hutchRef.get();
+    
+    if (doc.exists) {
+       const data = doc.data();
+       if (data && data.currentOccupancy > 0) {
+          throw new Error("Cannot delete hutch that is currently occupied.");
+       }
+       await hutchRef.delete();
+    }
   },
 
   // --- Breeding & Deliveries ---

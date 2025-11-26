@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save, Wand2, DollarSign, Baby, ShoppingBag } from 'lucide-react';
-import { Rabbit, RabbitStatus, Sex } from '../types';
+import { Rabbit, RabbitStatus, Sex, Hutch, Crossing, CrossingStatus } from '../types';
 import { FarmService } from '../services/farmService';
 
 interface RabbitFormModalProps {
@@ -17,8 +17,9 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
   const [activeTab, setActiveTab] = useState<'Born' | 'Purchased'>('Born');
   
   // Dropdown Data
-  const [does, setDoes] = useState<Rabbit[]>([]);
-  const [bucks, setBucks] = useState<Rabbit[]>([]);
+  const [hutches, setHutches] = useState<Hutch[]>([]);
+  const [crossings, setCrossings] = useState<Crossing[]>([]);
+  const [does, setDoes] = useState<Rabbit[]>([]); // Keep does for breed lookup
 
   // Form State
   const [formData, setFormData] = useState<Partial<Rabbit>>({
@@ -37,16 +38,25 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
 
   // Bulk Entry State
   const [kitCount, setKitCount] = useState(1);
+  const [selectedLitterId, setSelectedLitterId] = useState('');
 
   useEffect(() => {
     if (isOpen) {
-      // Load potential parents
+      // Load available hutches
+      FarmService.getHutches().then(setHutches);
+      
+      // Load potential parents/litters (Delivered or Pregnant)
+      FarmService.getCrossings().then(data => {
+         // Filter for relevant crossings
+         setCrossings(data.filter(c => c.status === CrossingStatus.Delivered || c.status === CrossingStatus.Pregnant));
+      });
+      
       FarmService.getRabbitsBySex(Sex.Female).then(setDoes);
-      FarmService.getRabbitsBySex(Sex.Male).then(setBucks);
 
       if (initialData) {
         setFormData(initialData);
         setActiveTab(initialData.source || 'Born');
+        setKitCount(1);
       } else {
         // Reset
         setFormData({
@@ -63,20 +73,32 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
           parentage: { sireId: '', doeId: '' }
         });
         setKitCount(1);
+        setSelectedLitterId('');
         setActiveTab('Born');
       }
     }
   }, [initialData, isOpen]);
 
-  // Handle Mother Selection to auto-fill breed/father if possible
-  const handleDoeChange = (doeId: string) => {
-    const mother = does.find(d => d.tag === doeId || d.rabbitId === doeId);
-    setFormData(prev => ({
-      ...prev,
-      parentage: { ...prev.parentage, doeId },
-      breed: mother ? mother.breed : prev.breed, // Inherit breed from mother by default
-      currentHutchId: mother ? mother.currentHutchId : prev.currentHutchId // Put kits in same hutch
-    }));
+  // Handle Mating Record Selection
+  const handleLitterChange = (crossingId: string) => {
+    setSelectedLitterId(crossingId);
+    if (!crossingId) return;
+
+    const crossing = crossings.find(c => c.id === crossingId);
+    if (crossing) {
+       // Look up mother to find breed (inherited)
+       const mother = does.find(d => d.tag === crossing.doeId);
+       
+       setFormData(prev => ({
+         ...prev,
+         parentage: { 
+             doeId: crossing.doeId, 
+             sireId: crossing.sireId 
+         },
+         breed: mother ? mother.breed : prev.breed,
+         dateOfBirth: crossing.actualDeliveryDate || crossing.expectedDeliveryDate || prev.dateOfBirth
+       }));
+    }
   };
 
   const generateTag = async () => {
@@ -137,169 +159,144 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveTab('Born')}
-                className={`flex-1 py-2 text-sm font-medium rounded-md flex items-center justify-center gap-2 transition-all ${
+                className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
                   activeTab === 'Born' ? 'bg-white shadow text-farm-700' : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                <Baby size={16} />
-                Born on Farm
+                <div className="flex items-center justify-center gap-2">
+                   <Baby size={16} /> Born on Farm
+                </div>
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('Purchased')}
-                className={`flex-1 py-2 text-sm font-medium rounded-md flex items-center justify-center gap-2 transition-all ${
+                className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
                   activeTab === 'Purchased' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                <ShoppingBag size={16} />
-                Purchased
+                <div className="flex items-center justify-center gap-2">
+                   <ShoppingBag size={16} /> Purchased
+                </div>
               </button>
             </div>
           )}
 
-          <form id="rabbitForm" onSubmit={handleSubmit} className="space-y-4">
+          <form id="rabbitForm" onSubmit={handleSubmit} className="space-y-6">
             
-            {/* --- BORN ON FARM SECTION: PARENTAGE --- */}
-            {activeTab === 'Born' && (
-              <div className="bg-farm-50 p-4 rounded-lg border border-farm-100 space-y-4">
-                 <h4 className="text-sm font-bold text-farm-800 flex items-center gap-2">
-                   <Baby size={16} /> New Litter Details
-                 </h4>
-                 
-                 <div className="grid grid-cols-2 gap-4">
-                    {/* Mother */}
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Mother (Doe)</label>
-                      <select 
-                        value={formData.parentage?.doeId}
-                        onChange={(e) => handleDoeChange(e.target.value)}
-                        className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-farm-500"
-                      >
-                        <option value="">Select Mother...</option>
-                        {does.map(d => (
-                          <option key={d.id} value={d.tag}>{d.tag} - {d.name || 'No Name'}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Father */}
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Father (Sire)</label>
-                      <select 
-                        value={formData.parentage?.sireId}
-                        onChange={(e) => setFormData(prev => ({...prev, parentage: {...prev.parentage, sireId: e.target.value}}))}
-                        className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-farm-500"
-                      >
-                        <option value="">Select Father...</option>
-                        {bucks.map(b => (
-                          <option key={b.id} value={b.tag}>{b.tag} - {b.name || 'No Name'}</option>
-                        ))}
-                      </select>
-                    </div>
-                 </div>
-
-                 {/* Kit Count (Bulk) */}
-                 {!initialData && (
-                   <div>
-                     <label className="block text-xs font-semibold text-gray-600 mb-1">Number of Kits (Bulk Entry)</label>
-                     <div className="flex items-center gap-3">
-                        <input 
-                          type="number" 
-                          min="1" 
-                          max="15"
-                          value={kitCount}
-                          onChange={(e) => setKitCount(parseInt(e.target.value))}
-                          className="w-24 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-farm-500"
-                        />
-                        <span className="text-xs text-gray-500">
-                          {kitCount > 1 ? `Will create ${kitCount} rabbit records.` : 'Single entry.'}
-                        </span>
-                     </div>
-                   </div>
-                 )}
-              </div>
-            )}
-
-            {/* --- PURCHASED SECTION: FINANCIALS --- */}
-            {activeTab === 'Purchased' && (
-              <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 space-y-4">
-                 <h4 className="text-sm font-bold text-blue-800 flex items-center gap-2">
-                   <DollarSign size={16} /> Purchase Details
-                 </h4>
-                 
-                 <div className="grid grid-cols-2 gap-4">
-                    {/* Cost */}
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Cost per Rabbit</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs">$</span>
-                        <input 
-                          type="number" 
-                          value={formData.purchaseCost}
-                          onChange={(e) => setFormData({...formData, purchaseCost: parseFloat(e.target.value)})}
-                          className="w-full pl-6 pr-3 py-2 bg-white border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="0.00"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Acquisition Date */}
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Date Acquired</label>
-                      <input 
-                        type="date" 
-                        value={formData.dateOfAcquisition}
-                        onChange={(e) => setFormData({...formData, dateOfAcquisition: e.target.value})}
-                        className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                 </div>
-              </div>
-            )}
-
-            {/* --- COMMON FIELDS --- */}
+            {/* Identity Section */}
             <div className="grid grid-cols-2 gap-4">
-              {/* Tag ID */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tag ID *</label>
+              <div className="col-span-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tag ID</label>
                 <div className="flex gap-2">
                   <input 
                     required
                     type="text" 
                     value={formData.tag}
                     onChange={e => setFormData({...formData, tag: e.target.value})}
-                    className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-farm-500 outline-none"
-                    placeholder="SN-REX-001"
+                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-farm-500 outline-none"
+                    placeholder="e.g. SN-REX-01"
                   />
                   <button 
-                    type="button" 
-                    onClick={generateTag}
-                    className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"
-                    title="Generate Tag"
+                     type="button"
+                     onClick={generateTag}
+                     className="p-2 bg-gray-100 rounded-lg text-farm-600 hover:bg-farm-50"
+                     title="Auto-generate"
                   >
                     <Wand2 size={16} />
                   </button>
                 </div>
-                {kitCount > 1 && activeTab === 'Born' && (
-                  <p className="text-[10px] text-gray-500 mt-1">Tags will be suffixed -1, -2, etc.</p>
-                )}
               </div>
-
-              {/* Name */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nickname</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Name (Optional)</label>
                 <input 
                   type="text" 
                   value={formData.name}
                   onChange={e => setFormData({...formData, name: e.target.value})}
                   className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-farm-500 outline-none"
-                  placeholder="Bella"
+                  placeholder="Nickname"
                 />
               </div>
             </div>
 
+            {/* Bulk Entry (Only for new births) */}
+            {!initialData && activeTab === 'Born' && (
+               <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                 <label className="block text-sm font-medium text-blue-800 mb-1">Number of Kits</label>
+                 <div className="flex items-center gap-3">
+                   <input 
+                      type="number"
+                      min="1"
+                      max="12"
+                      value={kitCount}
+                      onChange={e => setKitCount(parseInt(e.target.value))}
+                      className="w-20 px-3 py-1.5 bg-white border border-blue-200 rounded text-sm focus:outline-none"
+                   />
+                   <span className="text-xs text-blue-600">
+                     {kitCount > 1 ? `Will create ${kitCount} records (e.g., -1, -2)` : 'Single record'}
+                   </span>
+                 </div>
+               </div>
+            )}
+
+            {/* Parentage Section (Changes based on Source) */}
+            {activeTab === 'Born' ? (
+              <div className="space-y-3">
+                 <label className="block text-sm font-medium text-gray-700">Litter Source (Mating Record)</label>
+                 <select 
+                    value={selectedLitterId}
+                    onChange={e => handleLitterChange(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-farm-500 outline-none"
+                 >
+                    <option value="">-- Select Mating Record --</option>
+                    {crossings.map(c => (
+                      <option key={c.id} value={c.id}>
+                         {c.doeId} x {c.sireId} ({c.actualDeliveryDate || c.expectedDeliveryDate})
+                      </option>
+                    ))}
+                 </select>
+
+                 <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Mother (Doe)</label>
+                      <input type="text" disabled value={formData.parentage?.doeId} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded text-sm text-gray-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Father (Sire)</label>
+                      <input type="text" disabled value={formData.parentage?.sireId} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded text-sm text-gray-500" />
+                    </div>
+                 </div>
+              </div>
+            ) : (
+              <div className="space-y-3 p-4 border border-gray-200 rounded-lg bg-gray-50">
+                 <h4 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                   <DollarSign size={16} /> Purchase Details
+                 </h4>
+                 <div className="grid grid-cols-2 gap-4">
+                    <div>
+                       <label className="block text-xs font-medium text-gray-500 mb-1">Cost Per Rabbit</label>
+                       <input 
+                         type="number" 
+                         min="0"
+                         value={formData.purchaseCost}
+                         onChange={e => setFormData({...formData, purchaseCost: parseFloat(e.target.value)})}
+                         className="w-full px-3 py-2 bg-white border border-gray-300 rounded text-sm outline-none focus:border-blue-500"
+                       />
+                    </div>
+                    <div>
+                       <label className="block text-xs font-medium text-gray-500 mb-1">Acquisition Date</label>
+                       <input 
+                         type="date"
+                         value={formData.dateOfAcquisition}
+                         onChange={e => setFormData({...formData, dateOfAcquisition: e.target.value})}
+                         className="w-full px-3 py-2 bg-white border border-gray-300 rounded text-sm outline-none focus:border-blue-500"
+                       />
+                    </div>
+                 </div>
+              </div>
+            )}
+
+            {/* Details Grid */}
             <div className="grid grid-cols-2 gap-4">
-              {/* Breed */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Breed</label>
                 <select 
@@ -309,57 +306,38 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
                 >
                   <option value="Rex">Rex</option>
                   <option value="New Zealand">New Zealand</option>
-                  <option value="Flemish Giant">Flemish Giant</option>
-                  <option value="Dutch">Dutch</option>
                   <option value="California">California</option>
-                  <option value="Lionhead">Lionhead</option>
+                  <option value="Dutch">Dutch</option>
+                  <option value="Chinchilla">Chinchilla</option>
+                  <option value="Local">Local / Mixed</option>
                 </select>
               </div>
-
-              {/* Sex */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Sex</label>
-                <div className="flex gap-4 mt-2">
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input 
-                      type="radio" 
-                      name="sex" 
-                      checked={formData.sex === Sex.Female}
-                      onChange={() => setFormData({...formData, sex: Sex.Female})}
-                      className="text-farm-600 focus:ring-farm-500"
-                    />
-                    Female
-                  </label>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input 
-                      type="radio" 
-                      name="sex" 
-                      checked={formData.sex === Sex.Male}
-                      onChange={() => setFormData({...formData, sex: Sex.Male})}
-                      className="text-farm-600 focus:ring-farm-500"
-                    />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFormData({...formData, sex: Sex.Male})}
+                    className={`flex-1 py-2 text-sm border rounded-lg transition-colors ${
+                       formData.sex === Sex.Male ? 'bg-blue-50 border-blue-200 text-blue-700 font-medium' : 'bg-white border-gray-300'
+                    }`}
+                  >
                     Male
-                  </label>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({...formData, sex: Sex.Female})}
+                    className={`flex-1 py-2 text-sm border rounded-lg transition-colors ${
+                       formData.sex === Sex.Female ? 'bg-pink-50 border-pink-200 text-pink-700 font-medium' : 'bg-white border-gray-300'
+                    }`}
+                  >
+                    Female
+                  </button>
                 </div>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-               {/* Status */}
-               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <select 
-                  value={formData.status}
-                  onChange={e => setFormData({...formData, status: e.target.value as RabbitStatus})}
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-farm-500 outline-none"
-                >
-                  {Object.values(RabbitStatus).map(s => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* DOB */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
                 <input 
@@ -369,31 +347,46 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
                   className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-farm-500 outline-none"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Current Hutch</label>
+                <select 
+                  value={formData.currentHutchId || ''}
+                  onChange={e => setFormData({...formData, currentHutchId: e.target.value})}
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-farm-500 outline-none"
+                >
+                  <option value="">-- Unassigned --</option>
+                  {hutches.map(h => (
+                    <option key={h.hutchId} value={h.hutchId}>
+                      {h.label} ({h.currentOccupancy}/{h.capacity})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-
-            {/* Hutch */}
+            
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Hutch / Location</label>
-              <input 
-                type="text" 
-                value={formData.currentHutchId || ''}
-                onChange={e => setFormData({...formData, currentHutchId: e.target.value})}
-                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-farm-500 outline-none"
-                placeholder="e.g. H01 (Optional)"
-              />
+               <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+               <select 
+                  value={formData.status}
+                  onChange={e => setFormData({...formData, status: e.target.value as any})}
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-farm-500 outline-none"
+               >
+                  {Object.values(RabbitStatus).map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+               </select>
             </div>
 
-            {/* Notes */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
               <textarea 
-                value={formData.notes || ''}
+                rows={3}
+                value={formData.notes}
                 onChange={e => setFormData({...formData, notes: e.target.value})}
-                rows={2}
                 className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-farm-500 outline-none resize-none"
-                placeholder="Health notes..."
               />
             </div>
+
           </form>
         </div>
 
@@ -412,10 +405,9 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
             disabled={loading}
             className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-farm-600 text-white rounded-lg font-medium hover:bg-farm-700 disabled:opacity-50"
           >
-            {loading ? 'Saving...' : <><Save size={18} /> Save {kitCount > 1 && !initialData && activeTab === 'Born' ? 'All' : ''}</>}
+            {loading ? 'Saving...' : <><Save size={18} /> Save Rabbit</>}
           </button>
         </div>
-
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Plus, Warehouse, Edit2, AlertCircle } from 'lucide-react';
+import { Search, Filter, Plus, Warehouse, Edit2, AlertCircle, Trash2 } from 'lucide-react';
 import { Hutch } from '../types';
 import { FarmService } from '../services/farmService';
 import { HutchFormModal } from './HutchFormModal';
@@ -37,6 +37,21 @@ export const HutchList: React.FC = () => {
   const handleEdit = (hutch: Hutch) => {
     setSelectedHutch(hutch);
     setIsModalOpen(true);
+  };
+
+  const handleDelete = async (id: string, occupancy: number) => {
+    if (occupancy > 0) {
+      alert("Cannot delete a hutch that currently contains rabbits. Please move them first.");
+      return;
+    }
+    if (!confirm("Are you sure you want to delete this hutch?")) return;
+
+    try {
+      await FarmService.deleteHutch(id);
+      fetchData(); // Refresh
+    } catch (e: any) {
+      alert("Error deleting hutch: " + e.message);
+    }
   };
 
   // Filter Logic
@@ -128,12 +143,20 @@ export const HutchList: React.FC = () => {
                     {hutch.hutchId}
                   </span>
                 </div>
-                <button 
-                  onClick={() => handleEdit(hutch)}
-                  className="p-1.5 text-gray-400 hover:text-farm-600 hover:bg-farm-50 rounded-lg transition-colors"
-                >
-                  <Edit2 size={16} />
-                </button>
+                <div className="flex gap-1">
+                  <button 
+                    onClick={() => handleEdit(hutch)}
+                    className="p-1.5 text-gray-400 hover:text-farm-600 hover:bg-farm-50 rounded-lg transition-colors"
+                  >
+                    <Edit2 size={16} />
+                  </button>
+                  <button 
+                    onClick={() => handleDelete(hutch.id!, hutch.currentOccupancy)}
+                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
 
               {/* Occupancy Bar */}
