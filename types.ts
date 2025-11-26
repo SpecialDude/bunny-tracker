@@ -66,6 +66,18 @@ export interface Hutch {
   farmId: string;
 }
 
+export interface HutchOccupancy {
+  id?: string;
+  rabbitId: string;
+  hutchId: string;
+  hutchLabel: string;
+  startAt: string;
+  endAt?: string;
+  purpose: 'Housing' | 'Mating' | 'Quarantine' | 'Weaning' | 'Recovery';
+  notes?: string;
+  farmId: string;
+}
+
 export interface Rabbit {
   id?: string;
   rabbitId: string; // Internal ID

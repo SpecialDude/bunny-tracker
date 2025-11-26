@@ -1,12 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Plus, MoreHorizontal, Loader2, Rabbit as RabbitIcon, Skull, Stethoscope } from 'lucide-react';
+import { Search, Filter, Plus, MoreHorizontal, Loader2, Rabbit as RabbitIcon, Skull, Stethoscope, ArrowRightLeft, Eye } from 'lucide-react';
 import { Rabbit, RabbitStatus, Sex } from '../types';
 import { FarmService } from '../services/farmService';
 import { RabbitFormModal } from './RabbitFormModal';
 import { MortalityModal } from './MortalityModal';
 import { MedicalModal } from './MedicalModal';
+import { MoveRabbitModal } from './MoveRabbitModal';
+import { RabbitDetail } from './RabbitDetail';
 
-export const RabbitList: React.FC = () => {
+interface Props {
+    // Optional prop if we want to handle view switching internally or via parent
+}
+
+export const RabbitList: React.FC<Props> = () => {
+  const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
+  const [detailId, setDetailId] = useState<string | null>(null);
+
   const [rabbits, setRabbits] = useState<Rabbit[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -16,6 +25,7 @@ export const RabbitList: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMortalityModalOpen, setIsMortalityModalOpen] = useState(false);
   const [isMedicalModalOpen, setIsMedicalModalOpen] = useState(false);
+  const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
   const [selectedRabbit, setSelectedRabbit] = useState<Rabbit | undefined>(undefined);
 
   const fetchData = async () => {
@@ -32,7 +42,7 @@ export const RabbitList: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [viewMode]); // Refresh when coming back from detail view
 
   const handleAdd = () => {
     setSelectedRabbit(undefined);
@@ -52,6 +62,16 @@ export const RabbitList: React.FC = () => {
   const handleMedical = (rabbit: Rabbit) => {
     setSelectedRabbit(rabbit);
     setIsMedicalModalOpen(true);
+  };
+
+  const handleMove = (rabbit: Rabbit) => {
+    setSelectedRabbit(rabbit);
+    setIsMoveModalOpen(true);
+  };
+
+  const handleViewDetail = (rabbit: Rabbit) => {
+      setDetailId(rabbit.id!);
+      setViewMode('detail');
   };
 
   const getStatusColor = (status: RabbitStatus) => {
@@ -75,6 +95,10 @@ export const RabbitList: React.FC = () => {
 
     return matchesSearch && matchesFilter;
   });
+
+  if (viewMode === 'detail' && detailId) {
+      return <RabbitDetail rabbitId={detailId} onBack={() => setViewMode('list')} />;
+  }
 
   return (
     <div className="space-y-6">
@@ -173,6 +197,21 @@ export const RabbitList: React.FC = () => {
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button 
+                          onClick={() => handleViewDetail(rabbit)}
+                          className="p-1.5 hover:bg-blue-50 rounded text-gray-400 hover:text-blue-600"
+                          title="View Profile"
+                        >
+                          <Eye size={18} />
+                        </button>
+                        <button 
+                          onClick={() => handleMove(rabbit)}
+                          className="p-1.5 hover:bg-orange-50 rounded text-gray-400 hover:text-orange-600"
+                          title="Move Rabbit"
+                          disabled={!['Alive', 'Pregnant', 'Weaned'].includes(rabbit.status)}
+                        >
+                          <ArrowRightLeft size={18} />
+                        </button>
+                        <button 
                           onClick={() => handleMedical(rabbit)}
                           className="p-1.5 hover:bg-pink-50 rounded text-gray-400 hover:text-pink-600"
                           title="Medical Records"
@@ -233,6 +272,12 @@ export const RabbitList: React.FC = () => {
           <MedicalModal
             isOpen={isMedicalModalOpen}
             onClose={() => setIsMedicalModalOpen(false)}
+            rabbit={selectedRabbit}
+          />
+          <MoveRabbitModal
+            isOpen={isMoveModalOpen}
+            onClose={() => setIsMoveModalOpen(false)}
+            onSuccess={fetchData}
             rabbit={selectedRabbit}
           />
         </>
