@@ -31,12 +31,24 @@ export const HutchFormModal: React.FC<HutchFormModalProps> = ({
       if (initialData) {
         setFormData(initialData);
       } else {
+        // Reset defaults
         setFormData({
           label: '',
           number: 1,
           capacity: 1,
           accessories: [],
         });
+        
+        // Auto-increment logic: Fetch existing hutches to find max number
+        FarmService.getHutches().then(hutches => {
+          const maxNum = hutches.reduce((max, h) => Math.max(max, h.number), 0);
+          const nextNum = maxNum + 1;
+          setFormData(prev => ({
+            ...prev,
+            number: nextNum,
+            label: `Hutch ${nextNum}` // Auto-suggest label
+          }));
+        }).catch(err => console.error("Failed to fetch next hutch number", err));
       }
     }
   }, [initialData, isOpen]);
