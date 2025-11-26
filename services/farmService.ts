@@ -240,9 +240,11 @@ export const FarmService = {
     const rabbit = convertDoc(rabbitDoc) as Rabbit;
 
     // 2. Parallel Fetching
+    // IMPORTANT: Removed .orderBy() to avoid needing composite indexes in Firestore.
+    // Sorting will be done in-memory below.
     const [medicalSnap, historySnap, offspringSnap, littersSnap] = await Promise.all([
-        db.collection(`farms/${farmId}/medical`).where('rabbitId', '==', rabbit.tag).orderBy('date', 'desc').get(),
-        db.collection(`farms/${farmId}/hutchOccupancy`).where('rabbitId', '==', rabbitId).orderBy('startAt', 'desc').get(),
+        db.collection(`farms/${farmId}/medical`).where('rabbitId', '==', rabbit.tag).get(),
+        db.collection(`farms/${farmId}/hutchOccupancy`).where('rabbitId', '==', rabbitId).get(),
         // Finding offspring: where parentage.doeId or sireId matches this rabbit's tag
         db.collection(`farms/${farmId}/rabbits`).where(
             rabbit.sex === Sex.Female ? 'parentage.doeId' : 'parentage.sireId', 
@@ -254,7 +256,7 @@ export const FarmService = {
             rabbit.sex === Sex.Female ? 'doeId' : 'sireId',
             '==',
             rabbit.tag
-        ).orderBy('dateOfCrossing', 'desc').get()
+        ).get()
     ]);
 
     // 3. Fetch Parents (Pedigree)
@@ -270,10 +272,14 @@ export const FarmService = {
 
     return {
         rabbit,
-        medical: medicalSnap.docs.map(doc => convertDoc(doc) as MedicalRecord),
-        history: historySnap.docs.map(doc => convertDoc(doc) as HutchOccupancy),
+        // Client-side sorting (Newest First)
+        medical: medicalSnap.docs.map(doc => convertDoc(doc) as MedicalRecord)
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+        history: historySnap.docs.map(doc => convertDoc(doc) as HutchOccupancy)
+            .sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime()),
         offspring: offspringSnap.docs.map(doc => convertDoc(doc) as Rabbit),
-        litters: littersSnap.docs.map(doc => convertDoc(doc) as Crossing),
+        litters: littersSnap.docs.map(doc => convertDoc(doc) as Crossing)
+            .sort((a, b) => new Date(b.dateOfCrossing).getTime() - new Date(a.dateOfCrossing).getTime()),
         pedigree: { sire, doe }
     };
   },
