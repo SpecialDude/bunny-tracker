@@ -63,13 +63,13 @@ const AppContent = () => {
 
   const renderContent = () => {
     switch (activePage) {
-      case 'dashboard': return <Dashboard />;
+      case 'dashboard': return <Dashboard onNavigate={setActivePage} />;
       case 'rabbits': return <RabbitList />;
       case 'hutches': return <HutchList />;
       case 'breeding': return <BreedingList />;
       case 'finances': return <FinanceList />;
       case 'settings': return <Settings />;
-      default: return <Dashboard />;
+      default: return <Dashboard onNavigate={setActivePage} />;
     }
   };
 

@@ -9,9 +9,12 @@ import {
 } from 'recharts';
 import { FarmService } from '../services/farmService';
 import { Rabbit, Hutch, Transaction, Crossing, TransactionType, RabbitStatus, CrossingStatus } from '../types';
-import { useNavigate } from 'react-router-dom'; // Assuming standard routing, or we use the parent prop
 
-export const Dashboard: React.FC = () => {
+interface DashboardProps {
+  onNavigate: (page: string) => void;
+}
+
+export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const [loading, setLoading] = useState(true);
   
   // Data State
@@ -194,11 +197,17 @@ export const Dashboard: React.FC = () => {
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-             <button className="flex items-center justify-center gap-2 px-6 py-3 bg-white border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 shadow-sm">
+             <button 
+               onClick={() => onNavigate('hutches')}
+               className="flex items-center justify-center gap-2 px-6 py-3 bg-white border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 shadow-sm"
+             >
                <Warehouse size={20} />
                Add First Hutch
              </button>
-             <button className="flex items-center justify-center gap-2 px-6 py-3 bg-farm-600 text-white font-medium rounded-xl hover:bg-farm-700 shadow-lg shadow-farm-200">
+             <button 
+               onClick={() => onNavigate('rabbits')}
+               className="flex items-center justify-center gap-2 px-6 py-3 bg-farm-600 text-white font-medium rounded-xl hover:bg-farm-700 shadow-lg shadow-farm-200"
+             >
                <Plus size={20} />
                Add First Rabbit
              </button>
