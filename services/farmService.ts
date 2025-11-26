@@ -299,8 +299,6 @@ export const FarmService = {
       
       // Update hutch occupancy if assigned
       if (rabbitData.currentHutchId) {
-         // Use existing occupancy if possible, but Firestore increment is safer.
-         // For now, simple read-then-write logic for MVP.
          const hutchSnapshot = await db.collection(`farms/${farmId}/hutches`)
             .where('hutchId', '==', rabbitData.currentHutchId).get();
          
@@ -327,6 +325,76 @@ export const FarmService = {
       ...updates,
       updatedAt: new Date()
     });
+  },
+
+  async recordMortality(
+    rabbitId: string, 
+    status: RabbitStatus.Dead | RabbitStatus.Slaughtered, 
+    date: string, 
+    notes: string,
+    soldAmount?: number
+  ): Promise<void> {
+    if (isDemoMode()) {
+       // Mock logic...
+       const idx = MOCK_STORE.rabbits.findIndex((r: Rabbit) => r.id === rabbitId);
+       if (idx !== -1) {
+           MOCK_STORE.rabbits[idx].status = status;
+           MOCK_STORE.rabbits[idx].notes += ` [${status} on ${date}: ${notes}]`;
+           MOCK_STORE.rabbits[idx].currentHutchId = null;
+       }
+       return;
+    }
+
+    const userId = getUserId();
+    const farmId = getFarmId();
+    const batch = db.batch();
+    const timestamp = new Date();
+
+    const rabbitRef = db.collection(`farms/${farmId}/rabbits`).doc(rabbitId);
+    const rabbitDoc = await rabbitRef.get();
+    
+    if (!rabbitDoc.exists) throw new Error("Rabbit not found");
+    const rabbitData = rabbitDoc.data() as Rabbit;
+
+    // 1. Update Rabbit Status
+    batch.update(rabbitRef, {
+       status: status,
+       currentHutchId: null, // Remove from hutch
+       notes: (rabbitData.notes || '') + `\n[${status} on ${date}]: ${notes}`,
+       updatedAt: timestamp
+    });
+
+    // 2. Decrement Hutch Occupancy
+    if (rabbitData.currentHutchId) {
+       const hutchSnapshot = await db.collection(`farms/${farmId}/hutches`)
+          .where('hutchId', '==', rabbitData.currentHutchId).get();
+       
+       if (!hutchSnapshot.empty) {
+          const hutchRef = hutchSnapshot.docs[0].ref;
+          const currentOcc = hutchSnapshot.docs[0].data().currentOccupancy || 0;
+          batch.update(hutchRef, { 
+              currentOccupancy: Math.max(0, currentOcc - 1) 
+          });
+       }
+    }
+
+    // 3. Create Transaction if Slaughtered & Sold
+    if (status === RabbitStatus.Slaughtered && soldAmount && soldAmount > 0) {
+       const txnRef = db.collection(`farms/${farmId}/transactions`).doc();
+       batch.set(txnRef, {
+         id: txnRef.id,
+         farmId: farmId,
+         ownerUid: userId,
+         type: TransactionType.Income,
+         category: 'Meat Sale',
+         amount: soldAmount,
+         date: new Date(date).toISOString(),
+         relatedId: rabbitId,
+         notes: `Meat sale for rabbit ${rabbitData.tag}`
+       });
+    }
+
+    await batch.commit();
   },
 
   async generateNextTag(breedCode: string): Promise<string> {
