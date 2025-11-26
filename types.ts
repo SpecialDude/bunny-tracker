@@ -25,6 +25,15 @@ export enum CrossingStatus {
   Delivered = 'Delivered'       // Kits born
 }
 
+export enum MedicalType {
+  Vaccination = 'Vaccination',
+  Medication = 'Medication',
+  Injury = 'Injury Treatment',
+  Checkup = 'Routine Checkup',
+  Deworming = 'Deworming',
+  Other = 'Other'
+}
+
 // Data Models
 export interface UserProfile {
   uid: string;
@@ -127,6 +136,19 @@ export interface Sale {
   amount: number;
   date: string;
   notes?: string;
+  farmId: string;
+}
+
+export interface MedicalRecord {
+  id?: string;
+  rabbitId: string; // Tag or ID
+  date: string;
+  type: MedicalType;
+  medicationName: string; // e.g. "Ivermectin"
+  dosage?: string;      // e.g. "0.2ml"
+  cost: number;
+  notes?: string;
+  nextDueDate?: string; // For recurring vaccines
   farmId: string;
 }
 

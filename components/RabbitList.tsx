@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Plus, MoreHorizontal, Loader2, Rabbit as RabbitIcon, Skull } from 'lucide-react';
+import { Search, Filter, Plus, MoreHorizontal, Loader2, Rabbit as RabbitIcon, Skull, Stethoscope } from 'lucide-react';
 import { Rabbit, RabbitStatus, Sex } from '../types';
 import { FarmService } from '../services/farmService';
 import { RabbitFormModal } from './RabbitFormModal';
 import { MortalityModal } from './MortalityModal';
+import { MedicalModal } from './MedicalModal';
 
 export const RabbitList: React.FC = () => {
   const [rabbits, setRabbits] = useState<Rabbit[]>([]);
@@ -14,6 +15,7 @@ export const RabbitList: React.FC = () => {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMortalityModalOpen, setIsMortalityModalOpen] = useState(false);
+  const [isMedicalModalOpen, setIsMedicalModalOpen] = useState(false);
   const [selectedRabbit, setSelectedRabbit] = useState<Rabbit | undefined>(undefined);
 
   const fetchData = async () => {
@@ -45,6 +47,11 @@ export const RabbitList: React.FC = () => {
   const handleMortality = (rabbit: Rabbit) => {
     setSelectedRabbit(rabbit);
     setIsMortalityModalOpen(true);
+  };
+
+  const handleMedical = (rabbit: Rabbit) => {
+    setSelectedRabbit(rabbit);
+    setIsMedicalModalOpen(true);
   };
 
   const getStatusColor = (status: RabbitStatus) => {
@@ -166,6 +173,13 @@ export const RabbitList: React.FC = () => {
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button 
+                          onClick={() => handleMedical(rabbit)}
+                          className="p-1.5 hover:bg-pink-50 rounded text-gray-400 hover:text-pink-600"
+                          title="Medical Records"
+                        >
+                          <Stethoscope size={18} />
+                        </button>
+                        <button 
                           onClick={() => handleEdit(rabbit)}
                           className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
                           title="Edit"
@@ -209,12 +223,19 @@ export const RabbitList: React.FC = () => {
       />
 
       {selectedRabbit && (
-        <MortalityModal 
-           isOpen={isMortalityModalOpen}
-           onClose={() => setIsMortalityModalOpen(false)}
-           onSuccess={fetchData}
-           rabbit={selectedRabbit}
-        />
+        <>
+          <MortalityModal 
+            isOpen={isMortalityModalOpen}
+            onClose={() => setIsMortalityModalOpen(false)}
+            onSuccess={fetchData}
+            rabbit={selectedRabbit}
+          />
+          <MedicalModal
+            isOpen={isMedicalModalOpen}
+            onClose={() => setIsMedicalModalOpen(false)}
+            rabbit={selectedRabbit}
+          />
+        </>
       )}
     </div>
   );

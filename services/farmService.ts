@@ -1,5 +1,5 @@
 import { db, auth } from '../firebase';
-import { Rabbit, RabbitStatus, Sex, Transaction, TransactionType, Hutch, Crossing, CrossingStatus, Delivery, Sale, Farm, UserProfile } from '../types';
+import { Rabbit, RabbitStatus, Sex, Transaction, TransactionType, Hutch, Crossing, CrossingStatus, Delivery, Sale, Farm, UserProfile, MedicalRecord } from '../types';
 
 // Default Settings Fallback
 const DEFAULT_SETTINGS = {
@@ -15,7 +15,8 @@ let MOCK_STORE: any = {
   rabbits: [],
   hutches: [],
   transactions: [],
-  crossings: []
+  crossings: [],
+  medical: []
 };
 
 // Check if we are in Demo Mode (auth.currentUser is null but we proceeded)
@@ -53,7 +54,8 @@ const convertDoc = (doc: any): any => {
     'dateOfCrossing', 
     'expectedDeliveryDate', 
     'expectedPalpationDate', 
-    'date'
+    'date',
+    'nextDueDate'
   ];
 
   dateFields.forEach(field => {
@@ -177,6 +179,7 @@ export const FarmService = {
     const hutches = await this.getHutches();
     const crossings = await this.getCrossings();
     const transactions = await this.getTransactions();
+    const medical = await this.getMedicalRecords();
     
     return {
       farmId: getFarmId(),
@@ -184,7 +187,8 @@ export const FarmService = {
       rabbits,
       hutches,
       crossings,
-      transactions
+      transactions,
+      medical
     };
   },
 
@@ -671,5 +675,69 @@ export const FarmService = {
     }
 
     await batch.commit();
+  },
+
+  // --- Medical Records ---
+  
+  async getMedicalRecords(rabbitId?: string): Promise<MedicalRecord[]> {
+    if (isDemoMode()) {
+       if (rabbitId) return MOCK_STORE.medical.filter((m: any) => m.rabbitId === rabbitId);
+       return MOCK_STORE.medical;
+    }
+    const farmId = getFarmId();
+    let query: any = db.collection(`farms/${farmId}/medical`).orderBy('date', 'desc');
+    
+    if (rabbitId) {
+      // In Firestore, standard filtering
+      // Note: We'll fetch all and filter in memory if composite index is missing, 
+      // or implement where() if we have index. For simplicity with the provided rules:
+      const snapshot = await query.get();
+      const records = snapshot.docs.map(doc => convertDoc(doc) as MedicalRecord);
+      return records.filter(r => r.rabbitId === rabbitId);
+    }
+
+    const snapshot = await query.get();
+    return snapshot.docs.map(doc => convertDoc(doc) as MedicalRecord);
+  },
+
+  async addMedicalRecord(data: Omit<MedicalRecord, 'id' | 'farmId'>): Promise<void> {
+     if (isDemoMode()) {
+        MOCK_STORE.medical.push({ ...data, id: 'med-'+Math.random(), farmId: 'demo' });
+        return;
+     }
+
+     const userId = getUserId();
+     const farmId = getFarmId();
+     const batch = db.batch();
+     const timestamp = new Date();
+
+     const medRef = db.collection(`farms/${farmId}/medical`).doc();
+     batch.set(medRef, {
+       ...data,
+       id: medRef.id,
+       farmId: farmId,
+       ownerUid: userId,
+       createdAt: timestamp,
+       date: new Date(data.date).toISOString(),
+       nextDueDate: data.nextDueDate ? new Date(data.nextDueDate).toISOString() : null
+     });
+
+     // Create Expense if cost > 0
+     if (data.cost && data.cost > 0) {
+        const txnRef = db.collection(`farms/${farmId}/transactions`).doc();
+        batch.set(txnRef, {
+          id: txnRef.id,
+          farmId: farmId,
+          ownerUid: userId,
+          type: TransactionType.Expense,
+          category: 'Medication',
+          amount: data.cost,
+          date: new Date(data.date).toISOString(),
+          relatedId: medRef.id,
+          notes: `${data.type}: ${data.medicationName} for rabbit ${data.rabbitId}`
+        });
+     }
+
+     await batch.commit();
   }
 };
