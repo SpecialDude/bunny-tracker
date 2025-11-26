@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, ShoppingCart, Search, Check } from 'lucide-react';
 import { FarmService } from '../services/farmService';
 import { Rabbit } from '../types';
+import { useAlert } from '../contexts/AlertContext';
 
 interface Props {
   isOpen: boolean;
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export const SaleFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
+  const { showToast } = useAlert();
   const [loading, setLoading] = useState(false);
   const [rabbits, setRabbits] = useState<Rabbit[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -50,7 +52,7 @@ export const SaleFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) =
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedIds.size === 0) {
-      alert("Please select at least one rabbit to sell.");
+      showToast("Please select at least one rabbit to sell.", 'info');
       return;
     }
     if (!formData.amount || !formData.buyerName) return;
@@ -64,11 +66,12 @@ export const SaleFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) =
         date: formData.date,
         notes: formData.notes
       });
+      showToast("Sale recorded successfully", 'success');
       onSuccess();
       onClose();
     } catch (error) {
       console.error(error);
-      alert("Failed to record sale.");
+      showToast("Failed to record sale", 'error');
     } finally {
       setLoading(false);
     }

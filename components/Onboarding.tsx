@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Rabbit, ArrowRight, Loader2, Globe, DollarSign, Type } from 'lucide-react';
 import { FarmService } from '../services/farmService';
 import { useAuth } from '../contexts/AuthContext';
+import { useAlert } from '../contexts/AlertContext';
 
 interface Props {
   onComplete: () => void;
@@ -9,6 +10,7 @@ interface Props {
 
 export const Onboarding: React.FC<Props> = ({ onComplete }) => {
   const { user } = useAuth();
+  const { showToast } = useAlert();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -23,10 +25,11 @@ export const Onboarding: React.FC<Props> = ({ onComplete }) => {
     setLoading(true);
     try {
       await FarmService.createFarm(formData);
+      showToast("Welcome to BunnyTrack! Your farm is ready.", 'success');
       onComplete();
     } catch (error) {
       console.error("Setup failed", error);
-      alert("Failed to setup farm. Please try again.");
+      showToast("Failed to setup farm. Please try again.", 'error');
     } finally {
       setLoading(false);
     }

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, Wand2, DollarSign, Baby, ShoppingBag, AlertTriangle, ArrowUpCircle } from 'lucide-react';
 import { Rabbit, RabbitStatus, Sex, Hutch, Crossing, CrossingStatus } from '../types';
 import { FarmService } from '../services/farmService';
+import { useAlert } from '../contexts/AlertContext';
 
 interface RabbitFormModalProps {
   isOpen: boolean;
@@ -13,6 +14,7 @@ interface RabbitFormModalProps {
 export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({ 
   isOpen, onClose, onSuccess, initialData 
 }) => {
+  const { showToast } = useAlert();
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'Born' | 'Purchased'>('Born');
   
@@ -140,7 +142,7 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
       if (isHutchFull()) {
         const hutch = getSelectedHutch();
         if (!expandCapacity) {
-          alert(`Hutch ${hutch?.label} is full. Please select another hutch or check "Increase capacity" to proceed.`);
+          showToast(`Hutch ${hutch?.label} is full. Please select another hutch or check "Increase capacity" to proceed.`, 'error');
           setLoading(false);
           return;
         } else if (hutch && hutch.id) {
@@ -162,14 +164,16 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
 
       if (initialData?.id) {
         await FarmService.updateRabbit(initialData.id, payload);
+        showToast("Rabbit updated successfully", 'success');
       } else {
         await FarmService.addRabbit(payload as any, isPurchase, kitCount);
+        showToast(`Added ${kitCount} rabbit(s) successfully`, 'success');
       }
       onSuccess();
       onClose();
     } catch (error) {
       console.error("Failed to save rabbit:", error);
-      alert("Failed to save. Check console for details.");
+      showToast("Failed to save. Check console for details.", 'error');
     } finally {
       setLoading(false);
     }

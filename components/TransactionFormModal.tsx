@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, DollarSign, Save } from 'lucide-react';
 import { FarmService } from '../services/farmService';
 import { TransactionType } from '../types';
+import { useAlert } from '../contexts/AlertContext';
 
 interface Props {
   isOpen: boolean;
@@ -14,6 +15,7 @@ const CATEGORIES = [
 ];
 
 export const TransactionFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
+  const { showToast } = useAlert();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     type: TransactionType.Expense,
@@ -36,6 +38,7 @@ export const TransactionFormModal: React.FC<Props> = ({ isOpen, onClose, onSucce
         date: formData.date,
         notes: formData.notes
       });
+      showToast("Transaction saved successfully", 'success');
       onSuccess();
       onClose();
       // Reset
@@ -48,7 +51,7 @@ export const TransactionFormModal: React.FC<Props> = ({ isOpen, onClose, onSucce
       });
     } catch (error) {
       console.error(error);
-      alert("Failed to add transaction.");
+      showToast("Failed to add transaction", 'error');
     } finally {
       setLoading(false);
     }

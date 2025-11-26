@@ -3,9 +3,11 @@ import { Save, User, Settings as SettingsIcon, Database, Download, AlertTriangle
 import { FarmService } from '../services/farmService';
 import { Farm } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { useAlert } from '../contexts/AlertContext';
 
 export const Settings: React.FC = () => {
   const { user } = useAuth();
+  const { showToast } = useAlert();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'general' | 'biological' | 'data'>('general');
@@ -21,6 +23,7 @@ export const Settings: React.FC = () => {
       setFarmSettings(data);
     } catch (error) {
       console.error("Failed to load settings", error);
+      showToast("Failed to load farm settings", 'error');
     } finally {
       setLoading(false);
     }
@@ -33,9 +36,9 @@ export const Settings: React.FC = () => {
     setSaving(true);
     try {
       await FarmService.updateFarmSettings(farmSettings);
-      alert("Settings saved successfully.");
+      showToast("Settings saved successfully", 'success');
     } catch (error) {
-      alert("Failed to save settings.");
+      showToast("Failed to save settings", 'error');
     } finally {
       setSaving(false);
     }
@@ -53,8 +56,9 @@ export const Settings: React.FC = () => {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+      showToast("Farm data exported successfully", 'success');
     } catch (error) {
-      alert("Failed to export data.");
+      showToast("Failed to export data", 'error');
     }
   };
 

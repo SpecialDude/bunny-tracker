@@ -4,8 +4,10 @@ import { Crossing, CrossingStatus } from '../types';
 import { FarmService } from '../services/farmService';
 import { CrossingFormModal } from './CrossingFormModal';
 import { DeliveryFormModal } from './DeliveryFormModal';
+import { useAlert } from '../contexts/AlertContext';
 
 export const BreedingList: React.FC = () => {
+  const { showToast, showConfirm } = useAlert();
   const [crossings, setCrossings] = useState<Crossing[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCrossingModalOpen, setIsCrossingModalOpen] = useState(false);
@@ -19,6 +21,7 @@ export const BreedingList: React.FC = () => {
       setCrossings(data);
     } catch (error) {
       console.error("Failed to load crossings", error);
+      showToast("Failed to load breeding records", 'error');
     } finally {
       setLoading(false);
     }
@@ -29,14 +32,22 @@ export const BreedingList: React.FC = () => {
   }, []);
 
   const handlePalpation = async (crossing: Crossing, result: 'Positive' | 'Negative') => {
-    if (!confirm(`Mark palpation as ${result} for Doe ${crossing.doeId}?`)) return;
+    const confirmed = await showConfirm({
+      title: 'Confirm Palpation Result',
+      message: `Mark palpation as ${result} for Doe ${crossing.doeId}?`,
+      confirmText: 'Confirm',
+      variant: result === 'Negative' ? 'danger' : 'primary'
+    });
+
+    if (!confirmed) return;
     
     const newStatus = result === 'Positive' ? CrossingStatus.Pregnant : CrossingStatus.Failed;
     try {
       await FarmService.updateCrossingStatus(crossing.id!, newStatus, result);
+      showToast(`Pregnancy marked as ${result}`, 'success');
       fetchData();
     } catch (e) {
-      alert("Failed to update status");
+      showToast("Failed to update status", 'error');
     }
   };
 

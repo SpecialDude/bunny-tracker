@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Baby } from 'lucide-react';
 import { FarmService } from '../services/farmService';
 import { Crossing } from '../types';
+import { useAlert } from '../contexts/AlertContext';
 
 interface Props {
   isOpen: boolean;
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export const DeliveryFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, crossing }) => {
+  const { showToast } = useAlert();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     dateOfDelivery: new Date().toISOString().split('T')[0],
@@ -29,11 +31,12 @@ export const DeliveryFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess,
         sireId: crossing.sireId,
         ...formData
       });
+      showToast("Delivery recorded successfully", 'success');
       onSuccess();
       onClose();
     } catch (error) {
       console.error(error);
-      alert("Failed to record delivery.");
+      showToast("Failed to record delivery", 'error');
     } finally {
       setLoading(false);
     }

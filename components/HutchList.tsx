@@ -3,8 +3,10 @@ import { Search, Filter, Plus, Warehouse, Edit2, AlertCircle, Trash2 } from 'luc
 import { Hutch } from '../types';
 import { FarmService } from '../services/farmService';
 import { HutchFormModal } from './HutchFormModal';
+import { useAlert } from '../contexts/AlertContext';
 
 export const HutchList: React.FC = () => {
+  const { showToast, showConfirm } = useAlert();
   const [hutches, setHutches] = useState<Hutch[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -20,6 +22,7 @@ export const HutchList: React.FC = () => {
       setHutches(data);
     } catch (error) {
       console.error("Failed to load hutches", error);
+      showToast("Failed to load hutches", 'error');
     } finally {
       setLoading(false);
     }
@@ -41,16 +44,25 @@ export const HutchList: React.FC = () => {
 
   const handleDelete = async (id: string, occupancy: number) => {
     if (occupancy > 0) {
-      alert("Cannot delete a hutch that currently contains rabbits. Please move them first.");
+      showToast("Cannot delete a hutch that currently contains rabbits. Please move them first.", 'error');
       return;
     }
-    if (!confirm("Are you sure you want to delete this hutch?")) return;
+    
+    const confirmed = await showConfirm({
+      title: 'Delete Hutch',
+      message: 'Are you sure you want to delete this hutch? This action cannot be undone.',
+      confirmText: 'Delete',
+      variant: 'danger'
+    });
+
+    if (!confirmed) return;
 
     try {
       await FarmService.deleteHutch(id);
+      showToast("Hutch deleted successfully", 'success');
       fetchData(); // Refresh
     } catch (e: any) {
-      alert("Error deleting hutch: " + e.message);
+      showToast("Error deleting hutch: " + e.message, 'error');
     }
   };
 

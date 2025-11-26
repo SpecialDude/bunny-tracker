@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, Heart } from 'lucide-react';
 import { FarmService } from '../services/farmService';
 import { Rabbit, Sex } from '../types';
+import { useAlert } from '../contexts/AlertContext';
 
 interface Props {
   isOpen: boolean;
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
+  const { showToast } = useAlert();
   const [loading, setLoading] = useState(false);
   const [does, setDoes] = useState<Rabbit[]>([]);
   const [bucks, setBucks] = useState<Rabbit[]>([]);
@@ -43,11 +45,12 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
         doeName: doe?.name,
         sireName: sire?.name
       });
+      showToast("Mating recorded successfully", 'success');
       onSuccess();
       onClose();
     } catch (error) {
       console.error(error);
-      alert("Failed to record mating.");
+      showToast("Failed to record mating", 'error');
     } finally {
       setLoading(false);
     }
