@@ -107,6 +107,7 @@ export interface Crossing {
   doeName?: string; // Cache for display
   sireName?: string;// Cache for display
   dateOfCrossing: string;
+  matingHutchId?: string; // Where mating occurred
   expectedPalpationDate: string;
   palpationResult?: 'Positive' | 'Negative' | 'Pending';
   expectedDeliveryDate: string;

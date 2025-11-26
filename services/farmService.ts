@@ -240,7 +240,7 @@ export const FarmService = {
     const rabbit = convertDoc(rabbitDoc) as Rabbit;
 
     // 2. Parallel Fetching
-    // IMPORTANT: Removed .orderBy() to avoid needing composite indexes in Firestore.
+    // Removed .orderBy() to avoid needing composite indexes in Firestore.
     // Sorting will be done in-memory below.
     const [medicalSnap, historySnap, offspringSnap, littersSnap] = await Promise.all([
         db.collection(`farms/${farmId}/medical`).where('rabbitId', '==', rabbit.tag).get(),
@@ -668,7 +668,15 @@ export const FarmService = {
     return snapshot.docs.map(doc => convertDoc(doc) as Crossing);
   },
 
-  async addCrossing(data: Omit<Crossing, 'id' | 'farmId' | 'status' | 'expectedDeliveryDate' | 'expectedPalpationDate'>): Promise<void> {
+  async addCrossing(
+    data: Omit<Crossing, 'id' | 'farmId' | 'status' | 'expectedDeliveryDate' | 'expectedPalpationDate'>,
+    moveConfig?: { 
+      mode: 'sire_visit_doe' | 'doe_visit_sire' | 'neutral', 
+      targetHutchId: string,
+      doeDbId?: string,
+      sireDbId?: string
+    }
+  ): Promise<void> {
     if (isDemoMode()) {
         MOCK_STORE.crossings.push({
             ...data, id: 'mock-cross-'+Math.random(), status: CrossingStatus.Pending, 
@@ -679,22 +687,21 @@ export const FarmService = {
 
     const userId = getUserId();
     const farmId = getFarmId();
-    const docRef = db.collection(`farms/${farmId}/crossings`).doc();
     
+    // Calculate dates
     let settings: Farm;
     try {
       settings = await this.getFarmSettings();
     } catch {
       settings = { defaultGestationDays: 31, defaultPalpationDays: 14 } as Farm; 
     }
-    
     const crossingDate = new Date(data.dateOfCrossing);
     const palpDate = new Date(crossingDate);
     palpDate.setDate(palpDate.getDate() + settings.defaultPalpationDays);
-    
     const deliveryDate = new Date(crossingDate);
     deliveryDate.setDate(deliveryDate.getDate() + settings.defaultGestationDays);
 
+    const docRef = db.collection(`farms/${farmId}/crossings`).doc();
     await docRef.set({
       ...data,
       id: docRef.id,
@@ -706,6 +713,18 @@ export const FarmService = {
       createdAt: new Date(),
       updatedAt: new Date()
     });
+
+    // Handle Movements if config present
+    if (moveConfig && moveConfig.targetHutchId) {
+        if (moveConfig.mode === 'sire_visit_doe' && moveConfig.sireDbId) {
+            await this.moveRabbit(moveConfig.sireDbId, moveConfig.targetHutchId, 'Mating', `Visiting Doe ${data.doeId}`);
+        } else if (moveConfig.mode === 'doe_visit_sire' && moveConfig.doeDbId) {
+            await this.moveRabbit(moveConfig.doeDbId, moveConfig.targetHutchId, 'Mating', `Visiting Sire ${data.sireId}`);
+        } else if (moveConfig.mode === 'neutral') {
+            if (moveConfig.doeDbId) await this.moveRabbit(moveConfig.doeDbId, moveConfig.targetHutchId, 'Mating', `Mating with ${data.sireId}`);
+            if (moveConfig.sireDbId) await this.moveRabbit(moveConfig.sireDbId, moveConfig.targetHutchId, 'Mating', `Mating with ${data.doeId}`);
+        }
+    }
   },
 
   async updateCrossingStatus(id: string, status: CrossingStatus, result?: 'Positive' | 'Negative'): Promise<void> {
