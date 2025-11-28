@@ -115,9 +115,15 @@ export const FarmService = {
 
     try {
       const farmId = getFarmId();
-      const doc = await db.collection('farms').doc(farmId).get();
-      if (doc.exists) {
-        return convertDoc(doc) as Farm;
+      // Optimization: catch permission-denied errors which mean doc doesn't exist
+      try {
+        const doc = await db.collection('farms').doc(farmId).get();
+        if (doc.exists) {
+          return convertDoc(doc) as Farm;
+        }
+      } catch (err: any) {
+        if (err.code === 'permission-denied') return null;
+        throw err;
       }
     } catch (error: any) {
       // If permission denied or other error, assume no farm setup yet
@@ -318,6 +324,7 @@ export const FarmService = {
     isPurchase: boolean,
     kitCount: number = 1
   ): Promise<void> {
+    // Legacy single/simple add function
     const userId = getUserId();
     const farmId = getFarmId();
     const timestamp = new Date();
@@ -410,6 +417,87 @@ export const FarmService = {
     }
 
     await batch.commit();
+  },
+
+  async addBulkRabbits(
+    baseData: Omit<Rabbit, 'id' | 'farmId' | 'rabbitId'>, 
+    kits: { tag: string, sex: Sex, name: string, hutchId: string }[],
+    isPurchase: boolean
+  ): Promise<void> {
+      const userId = getUserId();
+      const farmId = getFarmId();
+      const timestamp = new Date();
+  
+      if (isDemoMode()) {
+          kits.forEach(k => {
+              const id = 'mock-rabbit-'+Math.random();
+              MOCK_STORE.rabbits.push({
+                  ...baseData,
+                  ...k,
+                  id,
+                  rabbitId: id,
+                  farmId,
+                  createdAt: timestamp
+              });
+          });
+          return;
+      }
+  
+      const batch = db.batch();
+  
+      for (const kit of kits) {
+          const newRabbitRef = db.collection(`farms/${farmId}/rabbits`).doc();
+          
+          const docData = {
+              ...baseData,
+              tag: kit.tag,
+              sex: kit.sex,
+              name: kit.name,
+              currentHutchId: kit.hutchId,
+              rabbitId: newRabbitRef.id,
+              farmId: farmId,
+              ownerUid: userId,
+              createdAt: timestamp,
+              updatedAt: timestamp,
+              dateOfBirth: baseData.dateOfBirth ? new Date(baseData.dateOfBirth) : null,
+              dateOfAcquisition: baseData.dateOfAcquisition ? new Date(baseData.dateOfAcquisition) : timestamp,
+          };
+  
+          batch.set(newRabbitRef, docData);
+  
+          // Housing Logic
+          if (kit.hutchId) {
+             const hutchSnapshot = await db.collection(`farms/${farmId}/hutches`)
+                .where('hutchId', '==', kit.hutchId).get();
+             
+             if (!hutchSnapshot.empty) {
+                const hutchDoc = hutchSnapshot.docs[0];
+                const hutchRef = hutchDoc.ref;
+                
+                // Increment occupancy
+                batch.update(hutchRef, { 
+                    currentOccupancy: (hutchDoc.data().currentOccupancy || 0) + 1 
+                });
+  
+                // Create History Record
+                const historyRef = db.collection(`farms/${farmId}/hutchOccupancy`).doc();
+                batch.set(historyRef, {
+                    id: historyRef.id,
+                    rabbitId: newRabbitRef.id,
+                    hutchId: kit.hutchId,
+                    hutchLabel: hutchDoc.data().label,
+                    startAt: timestamp,
+                    purpose: 'Housing',
+                    notes: 'Initial placement (Kit)',
+                    farmId: farmId,
+                    ownerUid: userId,
+                    createdAt: timestamp
+                });
+             }
+          }
+      }
+  
+      await batch.commit();
   },
 
   async moveRabbit(rabbitId: string, targetHutchId: string | null, purpose: string, notes?: string): Promise<void> {
@@ -510,7 +598,7 @@ export const FarmService = {
     rabbitId: string, 
     status: RabbitStatus.Dead | RabbitStatus.Slaughtered, 
     date: string, 
-    notes: string,
+    notes: string, 
     soldAmount?: number
   ): Promise<void> {
     if (isDemoMode()) {
