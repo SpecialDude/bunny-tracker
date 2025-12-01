@@ -1,5 +1,5 @@
 import { db, auth } from '../firebase';
-import { Rabbit, RabbitStatus, Sex, Transaction, TransactionType, Hutch, Crossing, CrossingStatus, Delivery, Sale, Farm, UserProfile, MedicalRecord, HutchOccupancy } from '../types';
+import { Rabbit, RabbitStatus, Sex, Transaction, TransactionType, Hutch, Crossing, CrossingStatus, Delivery, Sale, Farm, UserProfile, MedicalRecord, HutchOccupancy, AppNotification } from '../types';
 
 // Default Settings Fallback
 const DEFAULT_SETTINGS = {
@@ -17,7 +17,8 @@ let MOCK_STORE: any = {
   transactions: [],
   crossings: [],
   medical: [],
-  occupancy: []
+  occupancy: [],
+  notifications: []
 };
 
 // Check if we are in Demo Mode (auth.currentUser is null but we proceeded)
@@ -1053,5 +1054,126 @@ export const FarmService = {
      }
 
      await batch.commit();
+  },
+
+  // --- Notifications ---
+
+  async getNotifications(limit = 10): Promise<AppNotification[]> {
+    if (isDemoMode()) return MOCK_STORE.notifications;
+    const farmId = getFarmId();
+    const snapshot = await db.collection(`farms/${farmId}/notifications`)
+        .orderBy('date', 'desc')
+        .limit(limit)
+        .get();
+    return snapshot.docs.map(doc => convertDoc(doc) as AppNotification);
+  },
+
+  async markNotificationRead(id: string): Promise<void> {
+    if (isDemoMode()) {
+        const n = MOCK_STORE.notifications.find((n:any) => n.id === id);
+        if (n) n.read = true;
+        return;
+    }
+    const farmId = getFarmId();
+    await db.collection(`farms/${farmId}/notifications`).doc(id).update({ read: true });
+  },
+
+  async markAllNotificationsRead(): Promise<void> {
+    if (isDemoMode()) {
+        MOCK_STORE.notifications.forEach((n:any) => n.read = true);
+        return;
+    }
+    const farmId = getFarmId();
+    const snapshot = await db.collection(`farms/${farmId}/notifications`).where('read', '==', false).get();
+    const batch = db.batch();
+    snapshot.docs.forEach(doc => {
+        batch.update(doc.ref, { read: true });
+    });
+    await batch.commit();
+  },
+
+  // Background Task to generate notifications
+  async runDailyChecks(): Promise<void> {
+    if (isDemoMode()) return;
+    const farmId = getFarmId();
+    const userId = getUserId();
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const threeDaysLater = new Date();
+    threeDaysLater.setDate(now.getDate() + 3);
+
+    // Helper to add notification if it doesn't exist
+    const addNotify = async (key: string, data: Omit<AppNotification, 'id' | 'farmId'>) => {
+        // Simple deduplication key check (not robust for production scale but good for MVP)
+        const q = await db.collection(`farms/${farmId}/notifications`)
+           .where('title', '==', data.title)
+           .where('date', '>=', todayStr) // only care if created today
+           .get();
+        
+        if (q.empty) {
+            await db.collection(`farms/${farmId}/notifications`).add({
+                ...data,
+                farmId,
+                ownerUid: userId,
+                createdAt: new Date(),
+                read: false
+            });
+        }
+    };
+
+    // 1. Check Upcoming Deliveries
+    const crossings = await this.getCrossings();
+    crossings.forEach(c => {
+        if (c.status === CrossingStatus.Pregnant) {
+            const deliveryDate = new Date(c.expectedDeliveryDate);
+            const diffTime = deliveryDate.getTime() - now.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+            
+            if (diffDays <= 3 && diffDays >= 0) {
+                addNotify(`delivery-${c.id}`, {
+                    type: 'Urgent',
+                    title: `Delivery Due: ${c.doeId}`,
+                    message: `Doe ${c.doeId} is expected to deliver in ${diffDays} day(s). Prepare hutch.`,
+                    date: todayStr,
+                    read: false,
+                    linkTo: 'breeding'
+                });
+            }
+        }
+        if (c.status === CrossingStatus.Pending) {
+             const palpDate = new Date(c.expectedPalpationDate);
+             if (palpDate <= now) {
+                 addNotify(`palp-${c.id}`, {
+                     type: 'Info',
+                     title: `Palpation Check: ${c.doeId}`,
+                     message: `Check pregnancy for mating with ${c.sireId}.`,
+                     date: todayStr,
+                     read: false,
+                     linkTo: 'breeding'
+                 });
+             }
+        }
+    });
+
+    // 2. Weaning (35 days old)
+    // In a real app, query rabbits with DOB ~35 days ago
+    // Here we iterate active
+    const rabbits = await this.getRabbits();
+    rabbits.forEach(r => {
+        if (r.dateOfBirth && r.status === RabbitStatus.Alive) { // Alive typically means kit if not weaned
+             const dob = new Date(r.dateOfBirth);
+             const ageDays = Math.floor((now.getTime() - dob.getTime()) / (1000 * 60 * 60 * 24));
+             if (ageDays === 35) { // Exact match for today
+                 addNotify(`wean-${r.id}`, {
+                     type: 'Warning',
+                     title: `Weaning Due: ${r.tag}`,
+                     message: `Rabbit ${r.tag} is 35 days old. Ready for weaning.`,
+                     date: todayStr,
+                     read: false,
+                     linkTo: 'rabbits'
+                 });
+             }
+        }
+    });
   }
 };

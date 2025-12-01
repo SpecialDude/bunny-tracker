@@ -10,6 +10,7 @@ import { Onboarding } from './components/Onboarding';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AlertProvider } from './contexts/AlertContext';
 import { FarmProvider } from './contexts/FarmContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import { Login } from './components/Login';
 import { Loader2 } from 'lucide-react';
 import { FarmService } from './services/farmService';
@@ -86,7 +87,9 @@ function App() {
     <AuthProvider>
       <AlertProvider>
         <FarmProvider>
-          <AppContent />
+          <NotificationProvider>
+            <AppContent />
+          </NotificationProvider>
         </FarmProvider>
       </AlertProvider>
     </AuthProvider>

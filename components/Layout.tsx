@@ -3,6 +3,8 @@ import { Menu, Home, Rabbit, Warehouse, Activity, DollarSign, Settings, LogOut, 
 import { AIChat } from './AIChat';
 import { useAuth } from '../contexts/AuthContext';
 import { useFarm } from '../contexts/FarmContext';
+import { useNotifications } from '../contexts/NotificationContext';
+import { NotificationPanel } from './NotificationPanel';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -13,7 +15,9 @@ interface LayoutProps {
 export const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate }) => {
   const { user, logout } = useAuth();
   const { farmName } = useFarm();
+  const { unreadCount } = useNotifications();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [imgError, setImgError] = useState(false);
 
   const navItems = [
@@ -91,7 +95,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between lg:px-8">
+        <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between lg:px-8 relative">
           <button 
             onClick={() => setIsSidebarOpen(true)}
             className="lg:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-md"
@@ -100,10 +104,24 @@ export const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate
           </button>
 
           <div className="flex items-center gap-4 ml-auto">
-            <button className="p-2 text-gray-500 hover:bg-gray-100 rounded-full relative">
-              <Bell size={20} />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
-            </button>
+            {/* Bell Icon */}
+            <div className="relative">
+                <button 
+                  onClick={() => setIsNotifOpen(!isNotifOpen)}
+                  className="p-2 text-gray-500 hover:bg-gray-100 rounded-full relative"
+                >
+                  <Bell size={20} />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-white animate-pulse"></span>
+                  )}
+                </button>
+                <NotificationPanel 
+                   isOpen={isNotifOpen} 
+                   onClose={() => setIsNotifOpen(false)}
+                   onNavigate={onNavigate}
+                />
+            </div>
+
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-farm-100 border border-farm-200 flex items-center justify-center text-farm-700 font-bold text-sm overflow-hidden">
                 {user?.photoURL && !imgError ? (

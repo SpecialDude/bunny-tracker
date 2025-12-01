@@ -165,6 +165,18 @@ export interface MedicalRecord {
   farmId: string;
 }
 
+export interface AppNotification {
+  id: string;
+  type: 'Info' | 'Warning' | 'Success' | 'Urgent';
+  title: string;
+  message: string;
+  date: string; // ISO
+  read: boolean;
+  linkTo?: string; // Navigation target e.g., 'breeding'
+  entityId?: string; // Related entity ID
+  farmId: string;
+}
+
 // AI Types
 export interface ChatMessage {
   id: string;
