@@ -393,7 +393,7 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
                             <input type="text" disabled value={formData.parentage?.doeId} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded text-sm text-gray-500" />
                             </div>
                             <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Father (Sire)</label>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Father (Buck)</label>
                             <input type="text" disabled value={formData.parentage?.sireId} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded text-sm text-gray-500" />
                             </div>
                         </div>

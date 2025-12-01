@@ -98,7 +98,7 @@ export const BreedingList: React.FC = () => {
             <table className="w-full text-left text-sm text-gray-500">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
-                  <th className="px-6 py-4 font-semibold text-gray-900">Doe & Sire</th>
+                  <th className="px-6 py-4 font-semibold text-gray-900">Doe & Buck</th>
                   <th className="px-6 py-4 font-semibold text-gray-900">Mating Date</th>
                   <th className="px-6 py-4 font-semibold text-gray-900">Expected Dates</th>
                   <th className="px-6 py-4 font-semibold text-gray-900">Status</th>

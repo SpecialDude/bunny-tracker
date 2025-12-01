@@ -127,7 +127,7 @@ export const RabbitDetail: React.FC<Props> = ({ rabbitId, onBack }) => {
                        </h3>
                        <div className="flex items-center gap-4">
                            <div className="flex-1 p-3 bg-blue-50 border border-blue-100 rounded-lg text-center">
-                               <span className="block text-xs text-blue-500 uppercase font-bold tracking-wider">Sire (Father)</span>
+                               <span className="block text-xs text-blue-500 uppercase font-bold tracking-wider">Buck (Father)</span>
                                <span className="font-bold text-blue-900">{rabbit.parentage.sireId || 'Unknown'}</span>
                                {pedigree.sire && <div className="text-xs text-blue-700">{pedigree.sire.breed}</div>}
                            </div>

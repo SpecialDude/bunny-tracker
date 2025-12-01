@@ -135,7 +135,7 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
             </div>
 
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Select Sire (Male)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Select Buck (Male)</label>
                 <select 
                 required
                 value={formData.sireId}
@@ -145,7 +145,7 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
                 }}
                 className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none text-sm"
                 >
-                <option value="">Choose Sire...</option>
+                <option value="">Choose Buck...</option>
                 {bucks.map(b => (
                     <option key={b.id} value={b.tag}>{b.tag} {b.name ? `(${b.name})` : ''}</option>
                 ))}
@@ -178,13 +178,13 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
                         <span className="block text-sm font-medium text-gray-900">In Doe's Hutch</span>
                         <span className="block text-xs text-gray-500">
                              {selectedDoe?.currentHutchId 
-                               ? `Sire moves to ${selectedDoe.currentHutchId}` 
+                               ? `Buck moves to ${selectedDoe.currentHutchId}` 
                                : "Doe has no hutch assigned"}
                         </span>
                     </div>
                 </label>
 
-                {/* Option 2: Sire's Hutch */}
+                {/* Option 2: Buck's Hutch */}
                 <label className={`flex items-center p-3 border rounded-lg cursor-pointer transition-colors ${
                     locationType === 'sire_hutch' ? 'bg-blue-50 border-blue-200' : 'hover:bg-gray-50 border-gray-200'
                 } ${!selectedSire?.currentHutchId ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -198,11 +198,11 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
                         disabled={!selectedSire?.currentHutchId}
                     />
                     <div className="ml-3">
-                        <span className="block text-sm font-medium text-gray-900">In Sire's Hutch</span>
+                        <span className="block text-sm font-medium text-gray-900">In Buck's Hutch</span>
                         <span className="block text-xs text-gray-500">
                              {selectedSire?.currentHutchId 
                                ? `Doe moves to ${selectedSire.currentHutchId}` 
-                               : "Sire has no hutch assigned"}
+                               : "Buck has no hutch assigned"}
                         </span>
                     </div>
                 </label>
