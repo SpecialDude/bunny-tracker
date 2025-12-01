@@ -10,6 +10,8 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string, name: string) => Promise<void>;
   enterDemoMode: () => void;
   logout: () => Promise<void>;
 }
@@ -21,9 +23,6 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-
-  // Set to false to enable real Firebase Authentication
-  const DEV_MODE_NO_AUTH = false;
 
   useEffect(() => {
     // Real Firebase Auth Listener
@@ -47,13 +46,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const signInWithEmail = async (email: string, password: string) => {
+    try {
+      const result = await auth.signInWithEmailAndPassword(email, password);
+      if (result.user) {
+        await FarmService.syncUser(result.user);
+      }
+    } catch (error) {
+      console.error("Error signing in with Email:", error);
+      throw error;
+    }
+  };
+
+  const signUpWithEmail = async (email: string, password: string, name: string) => {
+    try {
+      const result = await auth.createUserWithEmailAndPassword(email, password);
+      if (result.user) {
+        // Update Profile with Name immediately
+        await result.user.updateProfile({
+          displayName: name
+        });
+        
+        // Sync full details to Firestore
+        await FarmService.syncUser({ 
+          ...result.user, 
+          displayName: name // Ensure name is passed even if auth object isn't updated locally yet
+        });
+      }
+    } catch (error) {
+      console.error("Error signing up:", error);
+      throw error;
+    }
+  };
+
   const enterDemoMode = () => {
       // Mock User for Demo
       setUser(null); // Ensure no real auth
-      // We handle demo logic in services based on null auth
-      // But to trigger UI updates we might need a dummy object if strictly typed elsewhere
-      // For now, let's keep user null and use a separate flag or specific mock logic in components
-      // Actually, to make the Layout render, we need a Mock User object.
       
       const mockUser = {
         uid: 'demo-user-123',
@@ -62,7 +90,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         photoURL: null,
         emailVerified: true,
         isAnonymous: true,
-        // ... add other minimal properties needed by firebase.User type casting
       } as unknown as User;
 
       setUser(mockUser);
@@ -78,7 +105,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle, enterDemoMode, logout }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      loading, 
+      signInWithGoogle, 
+      signInWithEmail,
+      signUpWithEmail,
+      enterDemoMode, 
+      logout 
+    }}>
       {children}
     </AuthContext.Provider>
   );
