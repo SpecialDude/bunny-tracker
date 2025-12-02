@@ -447,7 +447,7 @@ export const FarmService = {
 
   async addBulkRabbits(
     baseData: Omit<Rabbit, 'id' | 'farmId' | 'rabbitId'>, 
-    kits: { tag: string, sex: Sex, name: string, hutchId: string }[],
+    kits: { tag: string, sex: Sex, name: string, hutchId: string, breed?: string }[],
     isPurchase: boolean
   ): Promise<void> {
       const userId = getUserId();
@@ -479,6 +479,7 @@ export const FarmService = {
               tag: kit.tag,
               sex: kit.sex,
               name: kit.name,
+              breed: kit.breed || baseData.breed, // Prefer kit breed, fallback to base
               currentHutchId: kit.hutchId,
               rabbitId: newRabbitRef.id,
               farmId: farmId,

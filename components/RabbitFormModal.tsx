@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Wand2, DollarSign, Baby, ShoppingBag, AlertTriangle, ArrowUpCircle, List, ArrowRight, Scale } from 'lucide-react';
+import { X, Save, Wand2, DollarSign, Baby, ShoppingBag, AlertTriangle, ArrowUpCircle, List, ArrowRight, Scale, RefreshCw } from 'lucide-react';
 import { Rabbit, RabbitStatus, Sex, Hutch, Crossing, CrossingStatus } from '../types';
 import { FarmService } from '../services/farmService';
 import { useAlert } from '../contexts/AlertContext';
@@ -18,6 +18,7 @@ interface KitDraft {
   sex: Sex;
   name: string;
   hutchId: string;
+  breed: string;
 }
 
 export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({ 
@@ -207,7 +208,8 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
             tag: `${formData.tag}-${i + 1}`,
             sex: Sex.Female, // Default
             name: '',
-            hutchId: formData.currentHutchId || ''
+            hutchId: formData.currentHutchId || '',
+            breed: formData.breed || 'Rex'
         });
     }
     setKits(generatedKits);
@@ -264,6 +266,23 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
       setKits(newKits);
   };
 
+  const handleKitBreedChange = async (index: number, newBreed: string) => {
+      const newKits = [...kits];
+      newKits[index].breed = newBreed;
+      
+      // Auto-regenerate Tag based on new breed code
+      try {
+          const newTag = await FarmService.generateNextTag(newBreed);
+          // Append index suffix to prevent conflict if user changes multiple to same breed sequentially
+          // (Simple heuristic for UI convenience)
+          newKits[index].tag = `${newTag}-${index+1}`; 
+      } catch (e) {
+          console.error("Error generating tag", e);
+      }
+      
+      setKits(newKits);
+  };
+
   if (!isOpen) return null;
 
   const hutchIsFull = isHutchFull();
@@ -271,7 +290,7 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
         
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b border-gray-100 shrink-0">
@@ -591,18 +610,19 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
             <div className="space-y-4">
                 <div className="p-3 bg-blue-50 text-blue-800 text-sm rounded-lg flex gap-2">
                    <List size={18} className="shrink-0"/>
-                   <p>Review the details for each kit. You can change gender or hutch before saving.</p>
+                   <p>Review the details for each kit. You can change breed, gender or hutch before saving.</p>
                 </div>
 
                 <div className="space-y-2">
                    <div className="grid grid-cols-12 gap-2 text-xs font-bold text-gray-500 px-2">
-                      <div className="col-span-4">Tag ID</div>
-                      <div className="col-span-4">Sex</div>
-                      <div className="col-span-4">Hutch</div>
+                      <div className="col-span-3">Tag ID</div>
+                      <div className="col-span-3">Breed</div>
+                      <div className="col-span-3">Sex</div>
+                      <div className="col-span-3">Hutch</div>
                    </div>
                    {kits.map((kit, idx) => (
                        <div key={idx} className="grid grid-cols-12 gap-2 items-center p-2 border rounded-lg bg-gray-50">
-                           <div className="col-span-4">
+                           <div className="col-span-3 relative">
                                <input 
                                   type="text" 
                                   value={kit.tag}
@@ -610,21 +630,37 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
                                   className="w-full px-2 py-1 bg-white border rounded text-sm font-bold text-gray-800"
                                />
                            </div>
-                           <div className="col-span-4">
+                           <div className="col-span-3">
+                               <div className="flex gap-1">
+                                   <select
+                                     value={kit.breed}
+                                     onChange={e => handleKitBreedChange(idx, e.target.value)}
+                                     className="w-full px-2 py-1 bg-white border rounded text-xs"
+                                   >
+                                        <option value="Rex">Rex</option>
+                                        <option value="New Zealand">New Zealand</option>
+                                        <option value="California">California</option>
+                                        <option value="Dutch">Dutch</option>
+                                        <option value="Chinchilla">Chinchilla</option>
+                                        <option value="Local">Local</option>
+                                   </select>
+                               </div>
+                           </div>
+                           <div className="col-span-3">
                                <select
                                  value={kit.sex}
                                  onChange={e => updateKit(idx, 'sex', e.target.value as Sex)}
-                                 className="w-full px-2 py-1 bg-white border rounded text-sm"
+                                 className="w-full px-2 py-1 bg-white border rounded text-xs"
                                >
                                    <option value={Sex.Female}>Female</option>
                                    <option value={Sex.Male}>Male</option>
                                </select>
                            </div>
-                           <div className="col-span-4">
+                           <div className="col-span-3">
                                <select
                                  value={kit.hutchId}
                                  onChange={e => updateKit(idx, 'hutchId', e.target.value)}
-                                 className="w-full px-2 py-1 bg-white border rounded text-xs"
+                                 className="w-full px-2 py-1 bg-white border rounded text-xs truncate"
                                >
                                   <option value="">None</option>
                                   {hutches.map(h => (
