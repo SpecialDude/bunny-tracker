@@ -125,6 +125,8 @@ export interface Crossing {
   expectedDeliveryDate: string;
   actualDeliveryDate?: string;
   status: CrossingStatus;
+  kitsBorn?: number; // Cached stats
+  kitsLive?: number; // Cached stats
   notes?: string;
   farmId: string;
 }

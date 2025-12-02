@@ -125,8 +125,14 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
              sireId: crossing.sireId 
          },
          breed: mother ? mother.breed : prev.breed,
+         // Use actual delivery date if available, else expected
          dateOfBirth: crossing.actualDeliveryDate || crossing.expectedDeliveryDate || prev.dateOfBirth
        }));
+
+       // Auto-fill Kit Count if delivered stats exist
+       if (crossing.status === CrossingStatus.Delivered && crossing.kitsLive && crossing.kitsLive > 0) {
+           setKitCount(crossing.kitsLive);
+       }
 
        // Set Default Hutch to Mother's Hutch
        if (mother && mother.currentHutchId) {
@@ -384,7 +390,7 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
                             <option value="">-- Select Mating Record --</option>
                             {crossings.map(c => (
                             <option key={c.id} value={c.id}>
-                                {c.doeId} x {c.sireId} ({c.actualDeliveryDate || c.expectedDeliveryDate})
+                                {c.doeId} x {c.sireId} ({c.status === 'Delivered' ? 'Delivered' : 'Pregnant'})
                             </option>
                             ))}
                         </select>

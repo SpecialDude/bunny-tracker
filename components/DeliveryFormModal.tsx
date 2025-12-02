@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { X, Baby } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Baby, Edit } from 'lucide-react';
 import { FarmService } from '../services/farmService';
-import { Crossing } from '../types';
+import { Crossing, CrossingStatus } from '../types';
 import { useAlert } from '../contexts/AlertContext';
 
 interface Props {
@@ -14,6 +14,9 @@ interface Props {
 export const DeliveryFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, crossing }) => {
   const { showToast } = useAlert();
   const [loading, setLoading] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [deliveryId, setDeliveryId] = useState<string | null>(null);
+
   const [formData, setFormData] = useState({
     dateOfDelivery: new Date().toISOString().split('T')[0],
     kitsBorn: 1,
@@ -21,22 +24,64 @@ export const DeliveryFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess,
     notes: ''
   });
 
+  useEffect(() => {
+      if (isOpen) {
+          // If already delivered, fetch existing details to edit
+          if (crossing.status === CrossingStatus.Delivered) {
+              setIsEditMode(true);
+              setFormData({
+                  dateOfDelivery: crossing.actualDeliveryDate || new Date().toISOString().split('T')[0],
+                  kitsBorn: crossing.kitsBorn || 0,
+                  kitsLive: crossing.kitsLive || 0,
+                  notes: '' // We might not have this cached in Crossing, would need fetch. For MVP, blank is ok or fetch Delivery.
+              });
+              
+              // Try to fetch the full delivery record to get ID and Notes
+              if (crossing.id) {
+                  FarmService.getDeliveryByCrossingId(crossing.id).then(del => {
+                      if (del) {
+                          setDeliveryId(del.id || null);
+                          setFormData(prev => ({
+                              ...prev,
+                              notes: del.notes || ''
+                          }));
+                      }
+                  });
+              }
+          } else {
+              setIsEditMode(false);
+              setDeliveryId(null);
+              setFormData({
+                dateOfDelivery: new Date().toISOString().split('T')[0],
+                kitsBorn: 1,
+                kitsLive: 1,
+                notes: ''
+              });
+          }
+      }
+  }, [isOpen, crossing]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await FarmService.recordDelivery({
-        crossingId: crossing.id!,
-        doeId: crossing.doeId,
-        sireId: crossing.sireId,
-        ...formData
-      });
-      showToast("Delivery recorded successfully", 'success');
+      if (isEditMode && deliveryId) {
+          await FarmService.updateDelivery(deliveryId, crossing.id!, formData);
+          showToast("Delivery updated successfully", 'success');
+      } else {
+          await FarmService.recordDelivery({
+            crossingId: crossing.id!,
+            doeId: crossing.doeId,
+            sireId: crossing.sireId,
+            ...formData
+          });
+          showToast("Delivery recorded successfully", 'success');
+      }
       onSuccess();
       onClose();
     } catch (error) {
       console.error(error);
-      showToast("Failed to record delivery", 'error');
+      showToast("Failed to save delivery", 'error');
     } finally {
       setLoading(false);
     }
@@ -49,7 +94,8 @@ export const DeliveryFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess,
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-            <Baby className="text-farm-600" size={20} /> Record Delivery
+            {isEditMode ? <Edit className="text-blue-600" size={20}/> : <Baby className="text-farm-600" size={20} />} 
+            {isEditMode ? 'Edit Delivery Details' : 'Record Delivery'}
           </h3>
           <button onClick={onClose} className="p-1 text-gray-400 hover:bg-gray-100 rounded">
             <X size={20} />
@@ -57,7 +103,7 @@ export const DeliveryFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess,
         </div>
 
         <div className="mb-4 p-3 bg-gray-50 rounded-lg text-sm text-gray-600">
-           Recording delivery for <strong>{crossing.doeId}</strong> x <strong>{crossing.sireId}</strong>.
+           {isEditMode ? 'Updating' : 'Recording'} delivery for <strong>{crossing.doeId}</strong> x <strong>{crossing.sireId}</strong>.
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -112,9 +158,11 @@ export const DeliveryFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess,
           <button 
             type="submit" 
             disabled={loading}
-            className="w-full flex items-center justify-center gap-2 py-2.5 bg-farm-600 text-white rounded-lg font-medium hover:bg-farm-700 disabled:opacity-50 mt-4"
+            className={`w-full flex items-center justify-center gap-2 py-2.5 text-white rounded-lg font-medium shadow-sm disabled:opacity-50 mt-4 ${
+                isEditMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-farm-600 hover:bg-farm-700'
+            }`}
           >
-            {loading ? 'Saving...' : 'Confirm Delivery'}
+            {loading ? 'Saving...' : (isEditMode ? 'Update Details' : 'Confirm Delivery')}
           </button>
         </form>
       </div>

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Activity, Calendar, CheckCircle2, XCircle, Baby, Loader2 } from 'lucide-react';
+import { Plus, Activity, Calendar, CheckCircle2, XCircle, Baby, Loader2, Edit, ListPlus } from 'lucide-react';
 import { Crossing, CrossingStatus } from '../types';
 import { FarmService } from '../services/farmService';
 import { CrossingFormModal } from './CrossingFormModal';
 import { DeliveryFormModal } from './DeliveryFormModal';
+import { RabbitFormModal } from './RabbitFormModal';
 import { useAlert } from '../contexts/AlertContext';
 
 export const BreedingList: React.FC = () => {
@@ -12,6 +13,7 @@ export const BreedingList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isCrossingModalOpen, setIsCrossingModalOpen] = useState(false);
   const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
+  const [isRabbitModalOpen, setIsRabbitModalOpen] = useState(false); // For "Create Records"
   const [selectedCrossing, setSelectedCrossing] = useState<Crossing | undefined>(undefined);
 
   const fetchData = async () => {
@@ -54,6 +56,19 @@ export const BreedingList: React.FC = () => {
   const handleDelivery = (crossing: Crossing) => {
     setSelectedCrossing(crossing);
     setIsDeliveryModalOpen(true);
+  };
+
+  // When "Create Rabbit Records" is clicked
+  const handleCreateRecords = (crossing: Crossing) => {
+      // We don't pre-set the rabbit form completely here, 
+      // but we could set an initial "selectedLitterId" if we exposed it as a prop.
+      // For now, let's just open the form and let user select the litter, 
+      // OR better, pass it as initialData logic (requires Refactor).
+      // SIMPLIFICATION: Just open modal, user selects litter from dropdown easily.
+      // IMPROVEMENT: We'll modify RabbitFormModal to accept a pre-selected litter ID if needed, 
+      // but standard add flow is fine as long as they pick the mother.
+      // ACTUALLY: Let's assume the user has to pick the litter in the modal.
+      setIsRabbitModalOpen(true);
   };
 
   const getStatusBadge = (status: CrossingStatus) => {
@@ -100,7 +115,7 @@ export const BreedingList: React.FC = () => {
                 <tr>
                   <th className="px-6 py-4 font-semibold text-gray-900">Doe & Buck</th>
                   <th className="px-6 py-4 font-semibold text-gray-900">Mating Date</th>
-                  <th className="px-6 py-4 font-semibold text-gray-900">Expected Dates</th>
+                  <th className="px-6 py-4 font-semibold text-gray-900">Dates / Stats</th>
                   <th className="px-6 py-4 font-semibold text-gray-900">Status</th>
                   <th className="px-6 py-4 font-semibold text-gray-900 text-right">Actions</th>
                 </tr>
@@ -123,12 +138,27 @@ export const BreedingList: React.FC = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="space-y-1">
-                        <div className="text-xs">
-                          <span className="text-gray-400">Palpate:</span> {cross.expectedPalpationDate}
-                        </div>
-                        <div className="text-xs">
-                          <span className="text-gray-400">Deliver:</span> <span className="font-medium text-gray-700">{cross.expectedDeliveryDate}</span>
-                        </div>
+                        {cross.status === CrossingStatus.Delivered ? (
+                            <>
+                                <div className="text-xs">
+                                    <span className="text-gray-400">Delivered:</span> <span className="font-medium text-gray-800">{cross.actualDeliveryDate}</span>
+                                </div>
+                                {(cross.kitsLive !== undefined) && (
+                                    <div className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded w-fit">
+                                        {cross.kitsLive} Live / {cross.kitsBorn} Born
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            <>
+                                <div className="text-xs">
+                                    <span className="text-gray-400">Palpate:</span> {cross.expectedPalpationDate}
+                                </div>
+                                <div className="text-xs">
+                                    <span className="text-gray-400">Deliver:</span> <span className="font-medium text-gray-700">{cross.expectedDeliveryDate}</span>
+                                </div>
+                            </>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -164,6 +194,24 @@ export const BreedingList: React.FC = () => {
                              <Baby size={14} /> Record Delivery
                            </button>
                         )}
+                        {cross.status === CrossingStatus.Delivered && (
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => handleDelivery(cross)}
+                                    className="p-1.5 text-gray-500 hover:bg-gray-100 rounded border border-gray-200"
+                                    title="Edit Delivery Details"
+                                >
+                                    <Edit size={16} />
+                                </button>
+                                <button
+                                    onClick={() => handleCreateRecords(cross)}
+                                    className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 shadow-sm"
+                                    title="Create Rabbit Records for Kits"
+                                >
+                                    <ListPlus size={14} /> Create Records
+                                </button>
+                            </div>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -188,6 +236,13 @@ export const BreedingList: React.FC = () => {
           crossing={selectedCrossing}
         />
       )}
+
+      {/* Re-use Rabbit Modal for adding kits */}
+      <RabbitFormModal
+         isOpen={isRabbitModalOpen}
+         onClose={() => setIsRabbitModalOpen(false)}
+         onSuccess={fetchData}
+      />
     </div>
   );
 };

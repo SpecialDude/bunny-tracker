@@ -16,6 +16,7 @@ let MOCK_STORE: any = {
   hutches: [],
   transactions: [],
   crossings: [],
+  deliveries: [],
   medical: [],
   occupancy: [],
   notifications: [],
@@ -57,6 +58,8 @@ const convertDoc = (doc: any): any => {
     'dateOfCrossing', 
     'expectedDeliveryDate', 
     'expectedPalpationDate', 
+    'actualDeliveryDate',
+    'dateOfDelivery',
     'date',
     'nextDueDate',
     'startAt',
@@ -873,7 +876,17 @@ export const FarmService = {
   },
 
   async recordDelivery(data: Omit<Delivery, 'id' | 'farmId'>): Promise<void> {
-    if (isDemoMode()) return;
+    if (isDemoMode()) {
+        // mock logic
+        MOCK_STORE.deliveries.push(data);
+        const c = MOCK_STORE.crossings.find((x: any) => x.id === data.crossingId);
+        if (c) {
+            c.status = CrossingStatus.Delivered;
+            c.kitsBorn = data.kitsBorn;
+            c.kitsLive = data.kitsLive;
+        }
+        return;
+    }
     const userId = getUserId();
     const farmId = getFarmId();
     const batch = db.batch();
@@ -888,10 +901,13 @@ export const FarmService = {
       createdAt: timestamp
     });
 
+    // Update Crossing with Status AND stats
     const crossingRef = db.collection(`farms/${farmId}/crossings`).doc(data.crossingId);
     batch.update(crossingRef, { 
       status: CrossingStatus.Delivered,
       actualDeliveryDate: data.dateOfDelivery,
+      kitsBorn: data.kitsBorn,
+      kitsLive: data.kitsLive,
       updatedAt: timestamp 
     });
 
@@ -901,6 +917,37 @@ export const FarmService = {
     }
     
     await batch.commit();
+  },
+
+  async updateDelivery(deliveryId: string, crossingId: string, updates: Partial<Delivery>): Promise<void> {
+      if (isDemoMode()) return;
+      const farmId = getFarmId();
+      const batch = db.batch();
+      
+      // Update Delivery Doc
+      const delRef = db.collection(`farms/${farmId}/deliveries`).doc(deliveryId);
+      batch.update(delRef, updates);
+
+      // Update Parent Crossing with new stats if changed
+      if (updates.kitsBorn !== undefined || updates.kitsLive !== undefined || updates.dateOfDelivery !== undefined) {
+          const crossRef = db.collection(`farms/${farmId}/crossings`).doc(crossingId);
+          const crossUpdate: any = {};
+          if (updates.kitsBorn !== undefined) crossUpdate.kitsBorn = updates.kitsBorn;
+          if (updates.kitsLive !== undefined) crossUpdate.kitsLive = updates.kitsLive;
+          if (updates.dateOfDelivery !== undefined) crossUpdate.actualDeliveryDate = updates.dateOfDelivery;
+          
+          batch.update(crossRef, crossUpdate);
+      }
+
+      await batch.commit();
+  },
+
+  async getDeliveryByCrossingId(crossingId: string): Promise<Delivery | null> {
+      if (isDemoMode()) return null;
+      const farmId = getFarmId();
+      const snap = await db.collection(`farms/${farmId}/deliveries`).where('crossingId', '==', crossingId).limit(1).get();
+      if (snap.empty) return null;
+      return convertDoc(snap.docs[0]) as Delivery;
   },
 
   // --- Finances (Sales & Transactions) ---

@@ -48,10 +48,14 @@ export const RabbitDetail: React.FC<Props> = ({ rabbitId, onBack }) => {
 
   const { rabbit, history, medical, offspring, pedigree, litters, weights } = data;
 
-  const getAge = (dob: string) => {
-      if(!dob) return 'Unknown';
-      const months = Math.floor((new Date().getTime() - new Date(dob).getTime()) / (1000 * 60 * 60 * 24 * 30));
-      return `${months} months`;
+  const getFormattedAge = (dob?: string) => {
+      if (!dob) return 'Unknown';
+      const diff = new Date().getTime() - new Date(dob).getTime();
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      
+      if (days < 35) return `${days} days`;
+      if (days < 90) return `${Math.floor(days / 7)} weeks`;
+      return `${Math.floor(days / 30)} months`;
   };
 
   return (
@@ -115,7 +119,7 @@ export const RabbitDetail: React.FC<Props> = ({ rabbitId, onBack }) => {
                         <div>
                             <span className="block text-xs font-medium text-gray-500">Age</span>
                             <span className="text-sm font-medium flex items-center gap-2">
-                                <Clock size={14} className="text-gray-400"/> {getAge(rabbit.dateOfBirth)}
+                                <Clock size={14} className="text-gray-400"/> {getFormattedAge(rabbit.dateOfBirth)}
                             </span>
                         </div>
                         <div>
@@ -348,6 +352,11 @@ export const RabbitDetail: React.FC<Props> = ({ rabbitId, onBack }) => {
                                           {l.actualDeliveryDate && (
                                               <div className="text-xs text-gray-500 mt-1">Delivered: {l.actualDeliveryDate}</div>
                                           )}
+                                          {l.kitsBorn !== undefined && (
+                                              <div className="text-xs text-blue-600 font-medium mt-1">
+                                                  Born: {l.kitsBorn} | Live: {l.kitsLive}
+                                              </div>
+                                          )}
                                       </div>
                                   </div>
                               ))}
@@ -365,7 +374,7 @@ export const RabbitDetail: React.FC<Props> = ({ rabbitId, onBack }) => {
                               {offspring.map(k => (
                                   <div key={k.id} className="p-3 bg-gray-50 rounded-lg border border-gray-100 text-center">
                                       <div className="font-bold text-farm-700">{k.tag}</div>
-                                      <div className="text-xs text-gray-500">{k.sex} • {getAge(k.dateOfBirth)}</div>
+                                      <div className="text-xs text-gray-500">{k.sex} • {getFormattedAge(k.dateOfBirth)}</div>
                                       <div className={`mt-1 text-[10px] px-2 py-0.5 rounded-full inline-block ${
                                           k.status === 'Alive' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'
                                       }`}>

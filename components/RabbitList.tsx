@@ -93,6 +93,16 @@ export const RabbitList: React.FC<Props> = () => {
     }
   };
 
+  const getFormattedAge = (dob?: string) => {
+      if (!dob) return '-';
+      const diff = new Date().getTime() - new Date(dob).getTime();
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      
+      if (days < 35) return `${days} days`;
+      if (days < 90) return `${Math.floor(days / 7)} weeks`;
+      return `${Math.floor(days / 30)} months`;
+  };
+
   const filteredRabbits = rabbits.filter(r => {
     const matchesSearch = 
       r.tag.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -195,11 +205,8 @@ export const RabbitList: React.FC<Props> = () => {
                     <td className="px-6 py-4 text-gray-900">
                       {rabbit.currentHutchId || <span className="text-gray-300 italic">Unassigned</span>}
                     </td>
-                    <td className="px-6 py-4">
-                      {/* Simple Age Calc */}
-                      {rabbit.dateOfBirth ? (
-                         Math.floor((new Date().getTime() - new Date(rabbit.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 30)) + ' mo'
-                      ) : '-'}
+                    <td className="px-6 py-4 text-gray-700 font-medium">
+                      {getFormattedAge(rabbit.dateOfBirth)}
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-1">
