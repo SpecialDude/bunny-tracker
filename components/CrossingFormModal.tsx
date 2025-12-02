@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Save, Heart, Warehouse } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { X, Save, Heart, Warehouse, AlertTriangle } from 'lucide-react';
 import { FarmService } from '../services/farmService';
 import { Rabbit, Sex, Hutch } from '../types';
 import { useAlert } from '../contexts/AlertContext';
@@ -43,6 +43,30 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
   const selectedDoe = does.find(r => r.tag === formData.doeId);
   const selectedSire = bucks.find(r => r.tag === formData.sireId);
   
+  // Inbreeding Check Logic
+  const inbreedingWarning = useMemo(() => {
+    if (!selectedDoe || !selectedSire) return null;
+
+    const doeParents = selectedDoe.parentage || {};
+    const sireParents = selectedSire.parentage || {};
+
+    // Check strict equality and ensure values exist (are not empty/undefined)
+    const sameFather = doeParents.sireId && sireParents.sireId && (doeParents.sireId === sireParents.sireId);
+    const sameMother = doeParents.doeId && sireParents.doeId && (doeParents.doeId === sireParents.doeId);
+
+    if (sameFather && sameMother) {
+        return { title: 'Full Siblings Detected', message: 'These rabbits share the same Mother and Father.' };
+    }
+    if (sameFather) {
+        return { title: 'Half Siblings (Same Father)', message: `Both rabbits share the same father (${doeParents.sireId}).` };
+    }
+    if (sameMother) {
+        return { title: 'Half Siblings (Same Mother)', message: `Both rabbits share the same mother (${doeParents.doeId}).` };
+    }
+
+    return null;
+  }, [selectedDoe, selectedSire]);
+
   // Resolve the actual target hutch ID based on selection
   const getTargetHutchId = (): string => {
     if (locationType === 'doe_hutch') return selectedDoe?.currentHutchId || '';
@@ -158,6 +182,19 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
             </div>
           </div>
 
+          {/* Inbreeding Warning Alert */}
+          {inbreedingWarning && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex gap-3 items-start animate-fadeIn">
+                <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={18} />
+                <div>
+                  <p className="text-sm font-bold text-amber-800">Inbreeding Warning: {inbreedingWarning.title}</p>
+                  <p className="text-xs text-amber-700 mt-1">
+                    {inbreedingWarning.message} This increases the risk of genetic defects.
+                  </p>
+                </div>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Mating Location (Rabbit Movement)</label>
             <div className="space-y-2">
@@ -263,9 +300,13 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
           <button 
             type="submit" 
             disabled={loading}
-            className="w-full flex items-center justify-center gap-2 py-2.5 bg-farm-600 text-white rounded-lg font-medium hover:bg-farm-700 disabled:opacity-50 mt-4"
+            className={`w-full flex items-center justify-center gap-2 py-2.5 text-white rounded-lg font-medium shadow-sm disabled:opacity-50 mt-4 ${
+                inbreedingWarning 
+                    ? 'bg-amber-600 hover:bg-amber-700 ring-2 ring-amber-200' 
+                    : 'bg-farm-600 hover:bg-farm-700'
+            }`}
           >
-            {loading ? 'Recording...' : 'Save Record & Move Rabbits'}
+            {loading ? 'Recording...' : inbreedingWarning ? 'Proceed with Inbreeding' : 'Save Record & Move Rabbits'}
           </button>
         </form>
       </div>
