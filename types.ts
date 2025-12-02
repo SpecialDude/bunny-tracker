@@ -1,3 +1,4 @@
+
 // Enums
 export enum RabbitStatus {
   Alive = 'Alive',
@@ -155,11 +156,24 @@ export interface Transaction {
   farmId: string;
 }
 
+export interface Customer {
+  id?: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  totalSpent: number;
+  lastPurchaseDate?: string;
+  notes?: string;
+  farmId: string;
+}
+
 export interface Sale {
   id?: string;
   saleId: string;
   rabbitIds: string[]; // List of tags/IDs sold
+  customerId?: string;
   buyerName: string;
+  buyerContact?: string; // Phone/Email snapshot
   amount: number;
   date: string;
   notes?: string;

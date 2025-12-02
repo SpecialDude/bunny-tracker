@@ -1,5 +1,6 @@
+
 import { db, auth } from '../firebase';
-import { Rabbit, RabbitStatus, Sex, Transaction, TransactionType, Hutch, Crossing, CrossingStatus, Delivery, Sale, Farm, UserProfile, MedicalRecord, HutchOccupancy, AppNotification, WeightRecord } from '../types';
+import { Rabbit, RabbitStatus, Sex, Transaction, TransactionType, Hutch, Crossing, CrossingStatus, Delivery, Sale, Farm, UserProfile, MedicalRecord, HutchOccupancy, AppNotification, WeightRecord, Customer } from '../types';
 
 // Default Settings Fallback
 const DEFAULT_SETTINGS = {
@@ -20,7 +21,8 @@ let MOCK_STORE: any = {
   medical: [],
   occupancy: [],
   notifications: [],
-  weights: []
+  weights: [],
+  customers: []
 };
 
 // Check if we are in Demo Mode (auth.currentUser is null but we proceeded)
@@ -64,7 +66,8 @@ const convertDoc = (doc: any): any => {
     'nextDueDate',
     'startAt',
     'endAt',
-    'createdAt'
+    'createdAt',
+    'lastPurchaseDate'
   ];
 
   dateFields.forEach(field => {
@@ -195,6 +198,7 @@ export const FarmService = {
     const crossings = await this.getCrossings();
     const transactions = await this.getTransactions();
     const medical = await this.getMedicalRecords();
+    const customers = await this.getCustomers();
     
     return {
       farmId: getFarmId(),
@@ -203,7 +207,8 @@ export const FarmService = {
       hutches,
       crossings,
       transactions,
-      medical
+      medical,
+      customers
     };
   },
 
@@ -254,12 +259,10 @@ export const FarmService = {
     const rabbit = convertDoc(rabbitDoc) as Rabbit;
 
     // 2. Parallel Fetching
-    // Removed .orderBy() to avoid needing composite indexes in Firestore.
-    // Sorting will be done in-memory below.
     const [medicalSnap, historySnap, offspringSnap, littersSnap, weightSnap] = await Promise.all([
         db.collection(`farms/${farmId}/medical`).where('rabbitId', '==', rabbit.tag).get(),
         db.collection(`farms/${farmId}/hutchOccupancy`).where('rabbitId', '==', rabbitId).get(),
-        // Finding offspring: where parentage.doeId or sireId matches this rabbit's tag
+        // Finding offspring
         db.collection(`farms/${farmId}/rabbits`).where(
             rabbit.sex === Sex.Female ? 'parentage.doeId' : 'parentage.sireId', 
             '==', 
@@ -287,7 +290,6 @@ export const FarmService = {
 
     return {
         rabbit,
-        // Client-side sorting (Newest First)
         medical: medicalSnap.docs.map(doc => convertDoc(doc) as MedicalRecord)
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
         history: historySnap.docs.map(doc => convertDoc(doc) as HutchOccupancy)
@@ -296,7 +298,7 @@ export const FarmService = {
         litters: littersSnap.docs.map(doc => convertDoc(doc) as Crossing)
             .sort((a, b) => new Date(b.dateOfCrossing).getTime() - new Date(a.dateOfCrossing).getTime()),
         weights: weightSnap.docs.map(doc => convertDoc(doc) as WeightRecord)
-            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()), // Oldest first for Chart
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
         pedigree: { sire, doe }
     };
   },
@@ -358,7 +360,6 @@ export const FarmService = {
 
     for (let i = 0; i < kitCount; i++) {
       const newRabbitRef = db.collection(`farms/${farmId}/rabbits`).doc();
-      
       let finalTag = rabbitData.tag;
       if (kitCount > 1) {
         finalTag = `${rabbitData.tag}-${(i + 1)}`;
@@ -378,7 +379,6 @@ export const FarmService = {
 
       batch.set(newRabbitRef, docData);
 
-      // Initial Weight Record
       if (rabbitData.weight && rabbitData.weight > 0) {
         const weightRef = db.collection(`farms/${farmId}/weights`).doc();
         batch.set(weightRef, {
@@ -394,7 +394,6 @@ export const FarmService = {
         });
       }
 
-      // Simple Transaction logic for purchases
       if (isPurchase && i === 0 && rabbitData.purchaseCost && rabbitData.purchaseCost > 0) {
         const txnRef = db.collection(`farms/${farmId}/transactions`).doc();
         batch.set(txnRef, {
@@ -410,7 +409,6 @@ export const FarmService = {
         });
       }
       
-      // Update hutch occupancy AND Create History if assigned
       if (rabbitData.currentHutchId) {
          const hutchSnapshot = await db.collection(`farms/${farmId}/hutches`)
             .where('hutchId', '==', rabbitData.currentHutchId).get();
@@ -419,16 +417,14 @@ export const FarmService = {
             const hutchDoc = hutchSnapshot.docs[0];
             const hutchRef = hutchDoc.ref;
             
-            // Increment
             batch.update(hutchRef, { 
                 currentOccupancy: (hutchDoc.data().currentOccupancy || 0) + 1 
             });
 
-            // Create History Record
             const historyRef = db.collection(`farms/${farmId}/hutchOccupancy`).doc();
             batch.set(historyRef, {
                 id: historyRef.id,
-                rabbitId: newRabbitRef.id, // Link by internal ID
+                rabbitId: newRabbitRef.id,
                 hutchId: rabbitData.currentHutchId,
                 hutchLabel: hutchDoc.data().label,
                 startAt: timestamp,
@@ -457,14 +453,7 @@ export const FarmService = {
       if (isDemoMode()) {
           kits.forEach(k => {
               const id = 'mock-rabbit-'+Math.random();
-              MOCK_STORE.rabbits.push({
-                  ...baseData,
-                  ...k,
-                  id,
-                  rabbitId: id,
-                  farmId,
-                  createdAt: timestamp
-              });
+              MOCK_STORE.rabbits.push({ ...baseData, ...k, id, rabbitId: id, farmId, createdAt: timestamp });
           });
           return;
       }
@@ -479,7 +468,7 @@ export const FarmService = {
               tag: kit.tag,
               sex: kit.sex,
               name: kit.name,
-              breed: kit.breed || baseData.breed, // Prefer kit breed, fallback to base
+              breed: kit.breed || baseData.breed,
               currentHutchId: kit.hutchId,
               rabbitId: newRabbitRef.id,
               farmId: farmId,
@@ -492,21 +481,14 @@ export const FarmService = {
   
           batch.set(newRabbitRef, docData);
   
-          // Housing Logic
           if (kit.hutchId) {
              const hutchSnapshot = await db.collection(`farms/${farmId}/hutches`)
                 .where('hutchId', '==', kit.hutchId).get();
              
              if (!hutchSnapshot.empty) {
                 const hutchDoc = hutchSnapshot.docs[0];
-                const hutchRef = hutchDoc.ref;
-                
-                // Increment occupancy
-                batch.update(hutchRef, { 
-                    currentOccupancy: (hutchDoc.data().currentOccupancy || 0) + 1 
-                });
+                batch.update(hutchDoc.ref, { currentOccupancy: (hutchDoc.data().currentOccupancy || 0) + 1 });
   
-                // Create History Record
                 const historyRef = db.collection(`farms/${farmId}/hutchOccupancy`).doc();
                 batch.set(historyRef, {
                     id: historyRef.id,
@@ -533,7 +515,6 @@ export const FarmService = {
     const timestamp = new Date();
 
     if (isDemoMode()) {
-       // Mock move logic for demo
        const r = MOCK_STORE.rabbits.find((r: any) => r.id === rabbitId);
        if (r) r.currentHutchId = targetHutchId;
        return;
@@ -546,43 +527,32 @@ export const FarmService = {
     if (!rabbitDoc.exists) throw new Error("Rabbit not found");
     const rabbitData = rabbitDoc.data() as Rabbit;
 
-    // 1. Handle Leaving Current Hutch (if any)
+    // 1. Leave Current
     if (rabbitData.currentHutchId) {
-        // Find current occupancy record to close it
         const occSnap = await db.collection(`farms/${farmId}/hutchOccupancy`)
             .where('rabbitId', '==', rabbitId)
             .where('hutchId', '==', rabbitData.currentHutchId)
-            .where('endAt', '==', null) // Only active ones
+            .where('endAt', '==', null)
             .get();
-        
-        occSnap.forEach(doc => {
-            batch.update(doc.ref, { endAt: timestamp });
-        });
+        occSnap.forEach(doc => { batch.update(doc.ref, { endAt: timestamp }); });
 
-        // Decrement old hutch count
         const oldHutchSnap = await db.collection(`farms/${farmId}/hutches`)
             .where('hutchId', '==', rabbitData.currentHutchId).get();
-        
         if (!oldHutchSnap.empty) {
             const currentVal = oldHutchSnap.docs[0].data().currentOccupancy || 0;
             batch.update(oldHutchSnap.docs[0].ref, { currentOccupancy: Math.max(0, currentVal - 1) });
         }
     }
 
-    // 2. Handle Entering New Hutch (if target exists)
+    // 2. Enter New
     if (targetHutchId) {
         const newHutchSnap = await db.collection(`farms/${farmId}/hutches`)
             .where('hutchId', '==', targetHutchId).get();
-        
         if (newHutchSnap.empty) throw new Error("Target hutch not found");
         const newHutchDoc = newHutchSnap.docs[0];
         
-        // Increment new hutch count
-        batch.update(newHutchDoc.ref, { 
-            currentOccupancy: (newHutchDoc.data().currentOccupancy || 0) + 1 
-        });
+        batch.update(newHutchDoc.ref, { currentOccupancy: (newHutchDoc.data().currentOccupancy || 0) + 1 });
 
-        // Create New Occupancy Record
         const newOccRef = db.collection(`farms/${farmId}/hutchOccupancy`).doc();
         batch.set(newOccRef, {
             id: newOccRef.id,
@@ -590,7 +560,7 @@ export const FarmService = {
             hutchId: targetHutchId,
             hutchLabel: newHutchDoc.data().label,
             startAt: timestamp,
-            endAt: null, // Open ended
+            endAt: null,
             purpose: purpose,
             notes: notes || '',
             farmId: farmId,
@@ -599,12 +569,7 @@ export const FarmService = {
         });
     }
 
-    // 3. Update Rabbit Record
-    batch.update(rabbitRef, {
-        currentHutchId: targetHutchId,
-        updatedAt: timestamp
-    });
-
+    batch.update(rabbitRef, { currentHutchId: targetHutchId, updatedAt: timestamp });
     await batch.commit();
   },
 
@@ -632,7 +597,6 @@ export const FarmService = {
        const idx = MOCK_STORE.rabbits.findIndex((r: Rabbit) => r.id === rabbitId);
        if (idx !== -1) {
            MOCK_STORE.rabbits[idx].status = status;
-           MOCK_STORE.rabbits[idx].notes += ` [${status} on ${date}: ${notes}]`;
            MOCK_STORE.rabbits[idx].currentHutchId = null;
        }
        return;
@@ -649,38 +613,25 @@ export const FarmService = {
     if (!rabbitDoc.exists) throw new Error("Rabbit not found");
     const rabbitData = rabbitDoc.data() as Rabbit;
 
-    // 1. Update Rabbit Status
     batch.update(rabbitRef, {
        status: status,
-       currentHutchId: null, // Remove from hutch
+       currentHutchId: null,
        notes: (rabbitData.notes || '') + `\n[${status} on ${date}]: ${notes}`,
        updatedAt: timestamp
     });
 
-    // 2. Decrement Hutch Occupancy & Close History
     if (rabbitData.currentHutchId) {
        const hutchSnapshot = await db.collection(`farms/${farmId}/hutches`)
           .where('hutchId', '==', rabbitData.currentHutchId).get();
-       
        if (!hutchSnapshot.empty) {
-          const hutchRef = hutchSnapshot.docs[0].ref;
-          const currentOcc = hutchSnapshot.docs[0].data().currentOccupancy || 0;
-          batch.update(hutchRef, { 
-              currentOccupancy: Math.max(0, currentOcc - 1) 
-          });
+          batch.update(hutchSnapshot.docs[0].ref, { currentOccupancy: Math.max(0, (hutchSnapshot.docs[0].data().currentOccupancy || 1) - 1) });
        }
-
-       // Close occupancy history
        const occSnap = await db.collection(`farms/${farmId}/hutchOccupancy`)
             .where('rabbitId', '==', rabbitId)
-            .where('endAt', '==', null)
-            .get();
-        occSnap.forEach(doc => {
-            batch.update(doc.ref, { endAt: new Date(date) }); // Set end date to mortality date
-        });
+            .where('endAt', '==', null).get();
+        occSnap.forEach(doc => { batch.update(doc.ref, { endAt: new Date(date) }); });
     }
 
-    // 3. Create Transaction if Slaughtered & Sold
     if (status === RabbitStatus.Slaughtered && soldAmount && soldAmount > 0) {
        const txnRef = db.collection(`farms/${farmId}/transactions`).doc();
        batch.set(txnRef, {
@@ -762,12 +713,9 @@ export const FarmService = {
     const farmId = getFarmId();
     const hutchRef = db.collection(`farms/${farmId}/hutches`).doc(id);
     const doc = await hutchRef.get();
-    
     if (doc.exists) {
        const data = doc.data();
-       if (data && data.currentOccupancy > 0) {
-          throw new Error("Cannot delete hutch that is currently occupied.");
-       }
+       if (data && data.currentOccupancy > 0) throw new Error("Cannot delete hutch that is currently occupied.");
        await hutchRef.delete();
     }
   },
@@ -785,12 +733,7 @@ export const FarmService = {
 
   async addCrossing(
     data: Omit<Crossing, 'id' | 'farmId' | 'status' | 'expectedDeliveryDate' | 'expectedPalpationDate'>,
-    moveConfig?: { 
-      mode: 'sire_visit_doe' | 'doe_visit_sire' | 'neutral', 
-      targetHutchId: string,
-      doeDbId?: string,
-      sireDbId?: string
-    }
+    moveConfig?: { mode: string, targetHutchId: string, doeDbId?: string, sireDbId?: string }
   ): Promise<void> {
     if (isDemoMode()) {
         MOCK_STORE.crossings.push({
@@ -802,14 +745,9 @@ export const FarmService = {
 
     const userId = getUserId();
     const farmId = getFarmId();
-    
-    // Calculate dates
     let settings: Farm;
-    try {
-      settings = await this.getFarmSettings();
-    } catch {
-      settings = { defaultGestationDays: 31, defaultPalpationDays: 14 } as Farm; 
-    }
+    try { settings = await this.getFarmSettings(); } catch { settings = { defaultGestationDays: 31, defaultPalpationDays: 14 } as Farm; }
+    
     const crossingDate = new Date(data.dateOfCrossing);
     const palpDate = new Date(crossingDate);
     palpDate.setDate(palpDate.getDate() + settings.defaultPalpationDays);
@@ -829,13 +767,10 @@ export const FarmService = {
       updatedAt: new Date()
     });
 
-    // Handle Movements if config present
     if (moveConfig && moveConfig.targetHutchId) {
-        if (moveConfig.mode === 'sire_visit_doe' && moveConfig.sireDbId) {
-            await this.moveRabbit(moveConfig.sireDbId, moveConfig.targetHutchId, 'Mating', `Visiting Doe ${data.doeId}`);
-        } else if (moveConfig.mode === 'doe_visit_sire' && moveConfig.doeDbId) {
-            await this.moveRabbit(moveConfig.doeDbId, moveConfig.targetHutchId, 'Mating', `Visiting Buck ${data.sireId}`);
-        } else if (moveConfig.mode === 'neutral') {
+        if (moveConfig.mode === 'sire_visit_doe' && moveConfig.sireDbId) await this.moveRabbit(moveConfig.sireDbId, moveConfig.targetHutchId, 'Mating', `Visiting Doe ${data.doeId}`);
+        else if (moveConfig.mode === 'doe_visit_sire' && moveConfig.doeDbId) await this.moveRabbit(moveConfig.doeDbId, moveConfig.targetHutchId, 'Mating', `Visiting Buck ${data.sireId}`);
+        else if (moveConfig.mode === 'neutral') {
             if (moveConfig.doeDbId) await this.moveRabbit(moveConfig.doeDbId, moveConfig.targetHutchId, 'Mating', `Mating with ${data.sireId}`);
             if (moveConfig.sireDbId) await this.moveRabbit(moveConfig.sireDbId, moveConfig.targetHutchId, 'Mating', `Mating with ${data.doeId}`);
         }
@@ -861,31 +796,20 @@ export const FarmService = {
 
     if (status === CrossingStatus.Pregnant && crossing.doeId) {
        const rabbits = await db.collection(`farms/${farmId}/rabbits`).where('tag', '==', crossing.doeId).get();
-       if (!rabbits.empty) {
-         batch.update(rabbits.docs[0].ref, { status: RabbitStatus.Pregnant });
-       }
+       if (!rabbits.empty) batch.update(rabbits.docs[0].ref, { status: RabbitStatus.Pregnant });
     }
-
     if (status === CrossingStatus.Failed && crossing.doeId) {
         const rabbits = await db.collection(`farms/${farmId}/rabbits`).where('tag', '==', crossing.doeId).get();
-        if (!rabbits.empty) {
-          batch.update(rabbits.docs[0].ref, { status: RabbitStatus.Alive });
-        }
+        if (!rabbits.empty) batch.update(rabbits.docs[0].ref, { status: RabbitStatus.Alive });
      }
-
     await batch.commit();
   },
 
   async recordDelivery(data: Omit<Delivery, 'id' | 'farmId'>): Promise<void> {
     if (isDemoMode()) {
-        // mock logic
         MOCK_STORE.deliveries.push(data);
         const c = MOCK_STORE.crossings.find((x: any) => x.id === data.crossingId);
-        if (c) {
-            c.status = CrossingStatus.Delivered;
-            c.kitsBorn = data.kitsBorn;
-            c.kitsLive = data.kitsLive;
-        }
+        if (c) { c.status = CrossingStatus.Delivered; c.kitsBorn = data.kitsBorn; c.kitsLive = data.kitsLive; }
         return;
     }
     const userId = getUserId();
@@ -894,28 +818,13 @@ export const FarmService = {
     const timestamp = new Date();
 
     const deliveryRef = db.collection(`farms/${farmId}/deliveries`).doc();
-    batch.set(deliveryRef, {
-      ...data,
-      id: deliveryRef.id,
-      farmId: farmId,
-      ownerUid: userId,
-      createdAt: timestamp
-    });
+    batch.set(deliveryRef, { ...data, id: deliveryRef.id, farmId, ownerUid: userId, createdAt: timestamp });
 
-    // Update Crossing with Status AND stats
     const crossingRef = db.collection(`farms/${farmId}/crossings`).doc(data.crossingId);
-    batch.update(crossingRef, { 
-      status: CrossingStatus.Delivered,
-      actualDeliveryDate: data.dateOfDelivery,
-      kitsBorn: data.kitsBorn,
-      kitsLive: data.kitsLive,
-      updatedAt: timestamp 
-    });
+    batch.update(crossingRef, { status: CrossingStatus.Delivered, actualDeliveryDate: data.dateOfDelivery, kitsBorn: data.kitsBorn, kitsLive: data.kitsLive, updatedAt: timestamp });
 
     const doeSnapshot = await db.collection(`farms/${farmId}/rabbits`).where('tag', '==', data.doeId).get();
-    if (!doeSnapshot.empty) {
-       batch.update(doeSnapshot.docs[0].ref, { status: RabbitStatus.Alive });
-    }
+    if (!doeSnapshot.empty) batch.update(doeSnapshot.docs[0].ref, { status: RabbitStatus.Alive });
     
     await batch.commit();
   },
@@ -925,21 +834,17 @@ export const FarmService = {
       const farmId = getFarmId();
       const batch = db.batch();
       
-      // Update Delivery Doc
       const delRef = db.collection(`farms/${farmId}/deliveries`).doc(deliveryId);
       batch.update(delRef, updates);
 
-      // Update Parent Crossing with new stats if changed
       if (updates.kitsBorn !== undefined || updates.kitsLive !== undefined || updates.dateOfDelivery !== undefined) {
           const crossRef = db.collection(`farms/${farmId}/crossings`).doc(crossingId);
           const crossUpdate: any = {};
           if (updates.kitsBorn !== undefined) crossUpdate.kitsBorn = updates.kitsBorn;
           if (updates.kitsLive !== undefined) crossUpdate.kitsLive = updates.kitsLive;
           if (updates.dateOfDelivery !== undefined) crossUpdate.actualDeliveryDate = updates.dateOfDelivery;
-          
           batch.update(crossRef, crossUpdate);
       }
-
       await batch.commit();
   },
 
@@ -951,15 +856,42 @@ export const FarmService = {
       return convertDoc(snap.docs[0]) as Delivery;
   },
 
+  // --- Customers ---
+
+  async getCustomers(): Promise<Customer[]> {
+    if (isDemoMode()) return MOCK_STORE.customers;
+    const farmId = getFarmId();
+    const snapshot = await db.collection(`farms/${farmId}/customers`).orderBy('totalSpent', 'desc').get();
+    return snapshot.docs.map(doc => convertDoc(doc) as Customer);
+  },
+
+  async addCustomer(data: Omit<Customer, 'id' | 'farmId' | 'totalSpent'>): Promise<string> {
+    if (isDemoMode()) {
+       const id = 'cust-' + Math.random();
+       MOCK_STORE.customers.push({ ...data, id, totalSpent: 0, farmId: 'demo' });
+       return id;
+    }
+    const userId = getUserId();
+    const farmId = getFarmId();
+    const docRef = db.collection(`farms/${farmId}/customers`).doc();
+    await docRef.set({
+       ...data,
+       id: docRef.id,
+       totalSpent: 0,
+       farmId,
+       ownerUid: userId,
+       createdAt: new Date()
+    });
+    return docRef.id;
+  },
+
   // --- Finances (Sales & Transactions) ---
 
   async getTransactions(): Promise<Transaction[]> {
     if (isDemoMode()) return MOCK_STORE.transactions;
     try {
       const farmId = getFarmId();
-      const snapshot = await db.collection(`farms/${farmId}/transactions`)
-        .orderBy('date', 'desc')
-        .get();
+      const snapshot = await db.collection(`farms/${farmId}/transactions`).orderBy('date', 'desc').get();
       return snapshot.docs.map(doc => convertDoc(doc) as Transaction);
     } catch (error) {
       console.error("Error fetching transactions:", error);
@@ -975,23 +907,20 @@ export const FarmService = {
     const userId = getUserId();
     const farmId = getFarmId();
     const docRef = db.collection(`farms/${farmId}/transactions`).doc();
-    
-    await docRef.set({
-      ...data,
-      id: docRef.id,
-      farmId: farmId,
-      ownerUid: userId,
-      createdAt: new Date(),
-      date: new Date(data.date).toISOString() 
-    });
+    await docRef.set({ ...data, id: docRef.id, farmId, ownerUid: userId, createdAt: new Date(), date: new Date(data.date).toISOString() });
   },
 
-  async recordSale(data: Omit<Sale, 'id' | 'farmId' | 'saleId'>): Promise<void> {
+  async recordSale(data: Omit<Sale, 'id' | 'farmId' | 'saleId'> & { customer?: Omit<Customer, 'id' | 'farmId' | 'totalSpent'> }): Promise<void> {
     if (isDemoMode()) {
         const saleId = 'S-'+Math.random();
-        MOCK_STORE.transactions.push({ 
-            type: TransactionType.Income, category: 'Sale', amount: data.amount, date: data.date, notes: 'Mock Sale', farmId: 'demo'
-        });
+        MOCK_STORE.transactions.push({ type: TransactionType.Income, category: 'Sale', amount: data.amount, date: data.date, notes: 'Mock Sale', farmId: 'demo' });
+        // Mock update customer if exists
+        if (data.customerId) {
+            const cust = MOCK_STORE.customers.find((c: any) => c.id === data.customerId);
+            if(cust) cust.totalSpent += data.amount;
+        } else if (data.customer) {
+            MOCK_STORE.customers.push({ ...data.customer, id: 'new-cust', totalSpent: data.amount });
+        }
         return;
     }
 
@@ -1000,6 +929,35 @@ export const FarmService = {
     const batch = db.batch();
     const timestamp = new Date();
     
+    // 1. Handle Customer
+    let customerId = data.customerId;
+    if (customerId) {
+        // Update Existing
+        const custRef = db.collection(`farms/${farmId}/customers`).doc(customerId);
+        const custSnap = await custRef.get();
+        if (custSnap.exists) {
+            const currentTotal = custSnap.data()?.totalSpent || 0;
+            batch.update(custRef, { 
+                totalSpent: currentTotal + data.amount,
+                lastPurchaseDate: new Date(data.date).toISOString()
+            });
+        }
+    } else if (data.customer) {
+        // Create New Customer
+        const custRef = db.collection(`farms/${farmId}/customers`).doc();
+        customerId = custRef.id;
+        batch.set(custRef, {
+            ...data.customer,
+            id: custRef.id,
+            totalSpent: data.amount,
+            lastPurchaseDate: new Date(data.date).toISOString(),
+            farmId,
+            ownerUid: userId,
+            createdAt: timestamp
+        });
+    }
+
+    // 2. Create Sale Record
     const saleRef = db.collection(`farms/${farmId}/sales`).doc();
     const saleId = `S-${Math.floor(Date.now() / 1000).toString().substring(4)}`; 
     
@@ -1007,56 +965,46 @@ export const FarmService = {
       ...data,
       id: saleRef.id,
       saleId: saleId,
-      farmId: farmId,
+      customerId: customerId || null,
+      customer: null, // Don't save the full object in sale doc if we have ID, but keep snapshot if needed. Cleaning up.
+      buyerContact: data.buyerContact || null,
+      farmId,
       ownerUid: userId,
       createdAt: timestamp,
       date: new Date(data.date).toISOString()
     });
 
+    // 3. Create Transaction
     const txnRef = db.collection(`farms/${farmId}/transactions`).doc();
     batch.set(txnRef, {
       id: txnRef.id,
-      farmId: farmId,
+      farmId,
       ownerUid: userId,
       type: TransactionType.Income,
       category: 'Rabbit Sale',
       amount: data.amount,
       date: new Date(data.date).toISOString(),
       relatedId: saleRef.id,
-      notes: `Sale of ${data.rabbitIds.length} rabbit(s) to ${data.buyerName}. IDs: ${data.rabbitIds.join(', ')}`
+      notes: `Sale of ${data.rabbitIds.length} rabbit(s) to ${data.buyerName}.`
     });
 
+    // 4. Update Rabbits (Mark Sold, Free Hutch)
     for (const rId of data.rabbitIds) {
       const rabbitRef = db.collection(`farms/${farmId}/rabbits`).doc(rId);
       const rDoc = await rabbitRef.get();
       if (rDoc.exists) {
-          // Close occupancy if sold
           const rData = rDoc.data();
           if (rData && rData.currentHutchId) {
-             const hutchSnapshot = await db.collection(`farms/${farmId}/hutches`)
-                .where('hutchId', '==', rData.currentHutchId).get();
+             const hutchSnapshot = await db.collection(`farms/${farmId}/hutches`).where('hutchId', '==', rData.currentHutchId).get();
              if (!hutchSnapshot.empty) {
                 const hDoc = hutchSnapshot.docs[0];
-                batch.update(hDoc.ref, { 
-                    currentOccupancy: Math.max(0, (hDoc.data().currentOccupancy || 1) - 1) 
-                });
+                batch.update(hDoc.ref, { currentOccupancy: Math.max(0, (hDoc.data().currentOccupancy || 1) - 1) });
              }
-             // Close history
-             const occSnap = await db.collection(`farms/${farmId}/hutchOccupancy`)
-                .where('rabbitId', '==', rId)
-                .where('endAt', '==', null)
-                .get();
-             occSnap.forEach(doc => {
-                 batch.update(doc.ref, { endAt: timestamp });
-             });
+             const occSnap = await db.collection(`farms/${farmId}/hutchOccupancy`).where('rabbitId', '==', rId).where('endAt', '==', null).get();
+             occSnap.forEach(doc => { batch.update(doc.ref, { endAt: timestamp }); });
           }
       }
-
-      batch.update(rabbitRef, {
-        status: RabbitStatus.Sold,
-        currentHutchId: null,
-        updatedAt: timestamp
-      });
+      batch.update(rabbitRef, { status: RabbitStatus.Sold, currentHutchId: null, updatedAt: timestamp });
     }
 
     await batch.commit();
@@ -1073,9 +1021,6 @@ export const FarmService = {
     let query: any = db.collection(`farms/${farmId}/medical`).orderBy('date', 'desc');
     
     if (rabbitId) {
-      // In Firestore, standard filtering
-      // Note: We'll fetch all and filter in memory if composite index is missing, 
-      // or implement where() if we have index. For simplicity with the provided rules:
       const snapshot = await query.get();
       const records = snapshot.docs.map(doc => convertDoc(doc) as MedicalRecord);
       return records.filter(r => r.rabbitId === rabbitId);
@@ -1090,7 +1035,6 @@ export const FarmService = {
         MOCK_STORE.medical.push({ ...data, id: 'med-'+Math.random(), farmId: 'demo' });
         return;
      }
-
      const userId = getUserId();
      const farmId = getFarmId();
      const batch = db.batch();
@@ -1100,19 +1044,18 @@ export const FarmService = {
      batch.set(medRef, {
        ...data,
        id: medRef.id,
-       farmId: farmId,
+       farmId,
        ownerUid: userId,
        createdAt: timestamp,
        date: new Date(data.date).toISOString(),
        nextDueDate: data.nextDueDate ? new Date(data.nextDueDate).toISOString() : null
      });
 
-     // Create Expense if cost > 0
      if (data.cost && data.cost > 0) {
         const txnRef = db.collection(`farms/${farmId}/transactions`).doc();
         batch.set(txnRef, {
           id: txnRef.id,
-          farmId: farmId,
+          farmId,
           ownerUid: userId,
           type: TransactionType.Expense,
           category: 'Medication',
@@ -1122,7 +1065,6 @@ export const FarmService = {
           notes: `${data.type}: ${data.medicationName} for rabbit ${data.rabbitId}`
         });
      }
-
      await batch.commit();
   },
 
@@ -1131,47 +1073,17 @@ export const FarmService = {
   async addWeightRecord(rabbitId: string, weight: number, date: string, ageAtRecord: string, notes?: string): Promise<void> {
       const userId = getUserId();
       const farmId = getFarmId();
-      
       if (isDemoMode()) {
-          MOCK_STORE.weights.push({
-              id: 'wt-' + Math.random(),
-              rabbitId,
-              weight,
-              date,
-              ageAtRecord,
-              unit: 'kg',
-              notes,
-              farmId: 'demo'
-          });
-          // Update rabbit weight in mock store
+          MOCK_STORE.weights.push({ id: 'wt-' + Math.random(), rabbitId, weight, date, ageAtRecord, unit: 'kg', notes, farmId: 'demo' });
           const r = MOCK_STORE.rabbits.find((rb: any) => rb.tag === rabbitId);
           if (r) r.weight = weight;
           return;
       }
-
       const batch = db.batch();
-      
-      // 1. Create Weight Record
       const weightRef = db.collection(`farms/${farmId}/weights`).doc();
-      batch.set(weightRef, {
-          id: weightRef.id,
-          rabbitId, // Tag
-          weight,
-          unit: 'kg',
-          date: new Date(date).toISOString(),
-          ageAtRecord,
-          notes: notes || '',
-          farmId,
-          ownerUid: userId
-      });
-
-      // 2. Update Rabbit Latest Weight
-      // Find rabbit by tag first since rabbitId in weights is the tag (as per types)
+      batch.set(weightRef, { id: weightRef.id, rabbitId, weight, unit: 'kg', date: new Date(date).toISOString(), ageAtRecord, notes: notes || '', farmId, ownerUid: userId });
       const rabbitQuery = await db.collection(`farms/${farmId}/rabbits`).where('tag', '==', rabbitId).get();
-      if (!rabbitQuery.empty) {
-          batch.update(rabbitQuery.docs[0].ref, { weight: weight, updatedAt: new Date() });
-      }
-
+      if (!rabbitQuery.empty) batch.update(rabbitQuery.docs[0].ref, { weight: weight, updatedAt: new Date() });
       await batch.commit();
   },
 
@@ -1180,10 +1092,7 @@ export const FarmService = {
   async getNotifications(limit = 10): Promise<AppNotification[]> {
     if (isDemoMode()) return MOCK_STORE.notifications;
     const farmId = getFarmId();
-    const snapshot = await db.collection(`farms/${farmId}/notifications`)
-        .orderBy('date', 'desc')
-        .limit(limit)
-        .get();
+    const snapshot = await db.collection(`farms/${farmId}/notifications`).orderBy('date', 'desc').limit(limit).get();
     return snapshot.docs.map(doc => convertDoc(doc) as AppNotification);
   },
 
@@ -1205,92 +1114,49 @@ export const FarmService = {
     const farmId = getFarmId();
     const snapshot = await db.collection(`farms/${farmId}/notifications`).where('read', '==', false).get();
     const batch = db.batch();
-    snapshot.docs.forEach(doc => {
-        batch.update(doc.ref, { read: true });
-    });
+    snapshot.docs.forEach(doc => { batch.update(doc.ref, { read: true }); });
     await batch.commit();
   },
 
-  // Background Task to generate notifications
   async runDailyChecks(): Promise<void> {
     if (isDemoMode()) return;
     const farmId = getFarmId();
     const userId = getUserId();
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
-    const threeDaysLater = new Date();
-    threeDaysLater.setDate(now.getDate() + 3);
-
-    // Helper to add notification if it doesn't exist
+    
     const addNotify = async (key: string, data: Omit<AppNotification, 'id' | 'farmId'>) => {
-        // Simple deduplication key check (not robust for production scale but good for MVP)
-        const q = await db.collection(`farms/${farmId}/notifications`)
-           .where('title', '==', data.title)
-           .where('date', '>=', todayStr) // only care if created today
-           .get();
-        
+        const q = await db.collection(`farms/${farmId}/notifications`).where('title', '==', data.title).where('date', '>=', todayStr).get();
         if (q.empty) {
-            await db.collection(`farms/${farmId}/notifications`).add({
-                ...data,
-                farmId,
-                ownerUid: userId,
-                createdAt: new Date(),
-                read: false
-            });
+            await db.collection(`farms/${farmId}/notifications`).add({ ...data, farmId, ownerUid: userId, createdAt: new Date(), read: false });
         }
     };
 
-    // 1. Check Upcoming Deliveries
     const crossings = await this.getCrossings();
     crossings.forEach(c => {
         if (c.status === CrossingStatus.Pregnant) {
             const deliveryDate = new Date(c.expectedDeliveryDate);
             const diffTime = deliveryDate.getTime() - now.getTime();
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-            
             if (diffDays <= 3 && diffDays >= 0) {
-                addNotify(`delivery-${c.id}`, {
-                    type: 'Urgent',
-                    title: `Delivery Due: ${c.doeId}`,
-                    message: `Doe ${c.doeId} is expected to deliver in ${diffDays} day(s). Prepare hutch.`,
-                    date: todayStr,
-                    read: false,
-                    linkTo: 'breeding'
-                });
+                addNotify(`delivery-${c.id}`, { type: 'Urgent', title: `Delivery Due: ${c.doeId}`, message: `Doe ${c.doeId} is expected to deliver in ${diffDays} day(s).`, date: todayStr, read: false, linkTo: 'breeding' });
             }
         }
         if (c.status === CrossingStatus.Pending) {
              const palpDate = new Date(c.expectedPalpationDate);
              if (palpDate <= now) {
-                 addNotify(`palp-${c.id}`, {
-                     type: 'Info',
-                     title: `Palpation Check: ${c.doeId}`,
-                     message: `Check pregnancy for mating with ${c.sireId}.`,
-                     date: todayStr,
-                     read: false,
-                     linkTo: 'breeding'
-                 });
+                 addNotify(`palp-${c.id}`, { type: 'Info', title: `Palpation Check: ${c.doeId}`, message: `Check pregnancy for mating with ${c.sireId}.`, date: todayStr, read: false, linkTo: 'breeding' });
              }
         }
     });
 
-    // 2. Weaning (35 days old)
-    // In a real app, query rabbits with DOB ~35 days ago
-    // Here we iterate active
     const rabbits = await this.getRabbits();
     rabbits.forEach(r => {
-        if (r.dateOfBirth && r.status === RabbitStatus.Alive) { // Alive typically means kit if not weaned
+        if (r.dateOfBirth && r.status === RabbitStatus.Alive) {
              const dob = new Date(r.dateOfBirth);
              const ageDays = Math.floor((now.getTime() - dob.getTime()) / (1000 * 60 * 60 * 24));
-             if (ageDays === 35) { // Exact match for today
-                 addNotify(`wean-${r.id}`, {
-                     type: 'Warning',
-                     title: `Weaning Due: ${r.tag}`,
-                     message: `Rabbit ${r.tag} is 35 days old. Ready for weaning.`,
-                     date: todayStr,
-                     read: false,
-                     linkTo: 'rabbits'
-                 });
+             if (ageDays === 35) {
+                 addNotify(`wean-${r.id}`, { type: 'Warning', title: `Weaning Due: ${r.tag}`, message: `Rabbit ${r.tag} is 35 days old. Ready for weaning.`, date: todayStr, read: false, linkTo: 'rabbits' });
              }
         }
     });
