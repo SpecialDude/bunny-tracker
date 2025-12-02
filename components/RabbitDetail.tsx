@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { 
     ArrowLeft, Calendar, Activity, Syringe, Baby, Clock, 
-    MapPin, Ruler, Dna, FileText, Loader2, Warehouse 
+    MapPin, Ruler, Dna, FileText, Loader2, Warehouse, Scale, TrendingUp 
 } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { FarmService } from '../services/farmService';
-import { Rabbit, HutchOccupancy, MedicalRecord, Crossing } from '../types';
+import { Rabbit, HutchOccupancy, MedicalRecord, Crossing, WeightRecord } from '../types';
+import { WeightModal } from './WeightModal';
 
 interface Props {
   rabbitId: string;
@@ -20,28 +22,31 @@ export const RabbitDetail: React.FC<Props> = ({ rabbitId, onBack }) => {
       history: HutchOccupancy[];
       pedigree: { sire?: Rabbit; doe?: Rabbit };
       litters: Crossing[];
+      weights: WeightRecord[];
   } | null>(null);
   
-  const [activeTab, setActiveTab] = useState<'overview' | 'history' | 'medical' | 'breeding'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'growth' | 'history' | 'medical' | 'breeding'>('overview');
+  const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
+
+  const loadData = async () => {
+    try {
+      const details = await FarmService.getRabbitDetails(rabbitId);
+      setData(details);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const details = await FarmService.getRabbitDetails(rabbitId);
-        setData(details);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+    loadData();
   }, [rabbitId]);
 
   if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin text-farm-600" /></div>;
   if (!data) return <div className="p-10 text-center text-red-500">Rabbit not found.</div>;
 
-  const { rabbit, history, medical, offspring, pedigree, litters } = data;
+  const { rabbit, history, medical, offspring, pedigree, litters, weights } = data;
 
   const getAge = (dob: string) => {
       if(!dob) return 'Unknown';
@@ -67,15 +72,21 @@ export const RabbitDetail: React.FC<Props> = ({ rabbitId, onBack }) => {
            </h2>
            <p className="text-gray-500 text-sm">{rabbit.name || 'No Name'} • {rabbit.breed} • {rabbit.sex}</p>
         </div>
+        <button 
+             onClick={() => setIsWeightModalOpen(true)}
+             className="ml-auto flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+        >
+             <Scale size={16} /> Weigh
+        </button>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200 flex space-x-6">
-          {(['overview', 'history', 'medical', 'breeding'] as const).map(tab => (
+      <div className="border-b border-gray-200 flex space-x-6 overflow-x-auto">
+          {(['overview', 'growth', 'history', 'medical', 'breeding'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`py-3 text-sm font-medium capitalize border-b-2 transition-colors ${
+                className={`py-3 text-sm font-medium capitalize border-b-2 transition-colors whitespace-nowrap ${
                     activeTab === tab 
                     ? 'border-farm-600 text-farm-800' 
                     : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -105,6 +116,12 @@ export const RabbitDetail: React.FC<Props> = ({ rabbitId, onBack }) => {
                             <span className="block text-xs font-medium text-gray-500">Age</span>
                             <span className="text-sm font-medium flex items-center gap-2">
                                 <Clock size={14} className="text-gray-400"/> {getAge(rabbit.dateOfBirth)}
+                            </span>
+                        </div>
+                        <div>
+                            <span className="block text-xs font-medium text-gray-500">Weight</span>
+                            <span className="text-sm font-medium flex items-center gap-2">
+                                <Scale size={14} className="text-gray-400"/> {rabbit.weight ? `${rabbit.weight} kg` : '-'}
                             </span>
                         </div>
                         <div>
@@ -170,6 +187,67 @@ export const RabbitDetail: React.FC<Props> = ({ rabbitId, onBack }) => {
                              <p className="text-sm text-gray-600 italic">"{rabbit.notes}"</p>
                          </div>
                     )}
+                 </div>
+              </div>
+          )}
+
+          {/* GROWTH TAB */}
+          {activeTab === 'growth' && (
+              <div className="space-y-6">
+                 <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-bold text-gray-900">Growth Chart</h3>
+                 </div>
+                 
+                 {weights.length > 0 ? (
+                     <div className="h-64 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={weights}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                <XAxis dataKey="date" tick={{fontSize: 12}} />
+                                <YAxis unit="kg" tick={{fontSize: 12}} />
+                                <Tooltip 
+                                    formatter={(val) => [`${val} kg`, 'Weight']} 
+                                    labelFormatter={(label) => `Date: ${label}`}
+                                />
+                                <Line type="monotone" dataKey="weight" stroke="#2563eb" strokeWidth={2} dot={{r: 4}} />
+                            </LineChart>
+                        </ResponsiveContainer>
+                     </div>
+                 ) : (
+                     <div className="h-64 flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-100 rounded-lg">
+                        <TrendingUp size={32} className="mb-2 opacity-50"/>
+                        <p>No weight records yet.</p>
+                     </div>
+                 )}
+
+                 <div className="mt-8">
+                     <h3 className="font-bold text-gray-900 mb-4">Weight History</h3>
+                     {weights.length === 0 ? (
+                         <p className="text-gray-500 italic text-sm">No measurements recorded.</p>
+                     ) : (
+                        <div className="overflow-x-auto border rounded-lg">
+                            <table className="w-full text-left text-sm text-gray-500">
+                                <thead className="bg-gray-50 text-gray-900 font-semibold">
+                                    <tr>
+                                        <th className="px-4 py-3">Date</th>
+                                        <th className="px-4 py-3">Weight</th>
+                                        <th className="px-4 py-3">Age at Record</th>
+                                        <th className="px-4 py-3">Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {weights.slice().reverse().map(w => ( // Show newest first in table
+                                        <tr key={w.id}>
+                                            <td className="px-4 py-3">{w.date}</td>
+                                            <td className="px-4 py-3 font-medium text-gray-900">{w.weight} kg</td>
+                                            <td className="px-4 py-3">{w.ageAtRecord || '-'}</td>
+                                            <td className="px-4 py-3 text-gray-400">{w.notes || '-'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                     )}
                  </div>
               </div>
           )}
@@ -302,6 +380,13 @@ export const RabbitDetail: React.FC<Props> = ({ rabbitId, onBack }) => {
           )}
 
       </div>
+
+      <WeightModal
+         isOpen={isWeightModalOpen}
+         onClose={() => setIsWeightModalOpen(false)}
+         onSuccess={loadData}
+         rabbit={rabbit}
+      />
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Wand2, DollarSign, Baby, ShoppingBag, AlertTriangle, ArrowUpCircle, List, ArrowRight } from 'lucide-react';
+import { X, Save, Wand2, DollarSign, Baby, ShoppingBag, AlertTriangle, ArrowUpCircle, List, ArrowRight, Scale } from 'lucide-react';
 import { Rabbit, RabbitStatus, Sex, Hutch, Crossing, CrossingStatus } from '../types';
 import { FarmService } from '../services/farmService';
 import { useAlert } from '../contexts/AlertContext';
@@ -46,6 +46,7 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
     currentHutchId: '',
     notes: '',
     purchaseCost: 0,
+    weight: 0,
     parentage: { sireId: '', doeId: '' }
   });
 
@@ -90,6 +91,7 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
           currentHutchId: '',
           notes: '',
           purchaseCost: 0,
+          weight: 0,
           parentage: { sireId: '', doeId: '' }
         });
         setKitCount(1);
@@ -473,15 +475,34 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
-                        <input 
-                        type="date" 
-                        value={formData.dateOfBirth}
-                        onChange={e => setFormData({...formData, dateOfBirth: e.target.value})}
-                        className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-farm-500 outline-none"
-                        />
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
+                            <input 
+                            type="date" 
+                            value={formData.dateOfBirth}
+                            onChange={e => setFormData({...formData, dateOfBirth: e.target.value})}
+                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-farm-500 outline-none"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Current Weight (kg)</label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                                    <Scale size={16} />
+                                </span>
+                                <input 
+                                type="number" 
+                                min="0"
+                                step="0.01"
+                                value={formData.weight || ''}
+                                onChange={e => setFormData({...formData, weight: parseFloat(e.target.value)})}
+                                className="w-full pl-9 pr-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-farm-500 outline-none"
+                                placeholder="0.00"
+                                />
+                            </div>
+                        </div>
                     </div>
+
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Current Hutch</label>
                         <select 
@@ -533,7 +554,6 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
                             </label>
                         </div>
                         )}
-                    </div>
                     </div>
                     
                     <div>

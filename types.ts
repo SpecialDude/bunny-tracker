@@ -89,6 +89,7 @@ export interface Rabbit {
   dateOfAcquisition?: string;
   source: 'Born' | 'Purchased';
   purchaseCost?: number;
+  weight?: number; // Latest weight in kg
   status: RabbitStatus;
   currentHutchId: string | null;
   pictureUrl?: string;
@@ -97,6 +98,17 @@ export interface Rabbit {
     doeId?: string;  // Tag 
   };
   notes: string;
+  farmId: string;
+}
+
+export interface WeightRecord {
+  id?: string;
+  rabbitId: string; // Tag or ID
+  date: string;
+  weight: number;
+  unit: string; // usually 'kg'
+  ageAtRecord?: string; // snapshot of age string e.g "12 weeks"
+  notes?: string;
   farmId: string;
 }
 

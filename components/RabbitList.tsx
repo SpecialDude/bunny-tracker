@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Plus, MoreHorizontal, Loader2, Rabbit as RabbitIcon, Skull, Stethoscope, ArrowRightLeft, Eye } from 'lucide-react';
+import { Search, Filter, Plus, MoreHorizontal, Loader2, Rabbit as RabbitIcon, Skull, Stethoscope, ArrowRightLeft, Eye, Scale } from 'lucide-react';
 import { Rabbit, RabbitStatus, Sex } from '../types';
 import { FarmService } from '../services/farmService';
 import { RabbitFormModal } from './RabbitFormModal';
@@ -7,6 +7,7 @@ import { MortalityModal } from './MortalityModal';
 import { MedicalModal } from './MedicalModal';
 import { MoveRabbitModal } from './MoveRabbitModal';
 import { RabbitDetail } from './RabbitDetail';
+import { WeightModal } from './WeightModal';
 
 interface Props {
     // Optional prop if we want to handle view switching internally or via parent
@@ -26,6 +27,7 @@ export const RabbitList: React.FC<Props> = () => {
   const [isMortalityModalOpen, setIsMortalityModalOpen] = useState(false);
   const [isMedicalModalOpen, setIsMedicalModalOpen] = useState(false);
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
+  const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
   const [selectedRabbit, setSelectedRabbit] = useState<Rabbit | undefined>(undefined);
 
   const fetchData = async () => {
@@ -67,6 +69,11 @@ export const RabbitList: React.FC<Props> = () => {
   const handleMove = (rabbit: Rabbit) => {
     setSelectedRabbit(rabbit);
     setIsMoveModalOpen(true);
+  };
+
+  const handleWeight = (rabbit: Rabbit) => {
+    setSelectedRabbit(rabbit);
+    setIsWeightModalOpen(true);
   };
 
   const handleViewDetail = (rabbit: Rabbit) => {
@@ -204,6 +211,13 @@ export const RabbitList: React.FC<Props> = () => {
                           <Eye size={18} />
                         </button>
                         <button 
+                          onClick={() => handleWeight(rabbit)}
+                          className="p-1.5 hover:bg-green-50 rounded text-gray-400 hover:text-green-600"
+                          title="Record Weight"
+                        >
+                          <Scale size={18} />
+                        </button>
+                        <button 
                           onClick={() => handleMove(rabbit)}
                           className="p-1.5 hover:bg-orange-50 rounded text-gray-400 hover:text-orange-600"
                           title="Move Rabbit"
@@ -279,6 +293,12 @@ export const RabbitList: React.FC<Props> = () => {
             onClose={() => setIsMoveModalOpen(false)}
             onSuccess={fetchData}
             rabbit={selectedRabbit}
+          />
+          <WeightModal
+             isOpen={isWeightModalOpen}
+             onClose={() => setIsWeightModalOpen(false)}
+             onSuccess={fetchData}
+             rabbit={selectedRabbit}
           />
         </>
       )}

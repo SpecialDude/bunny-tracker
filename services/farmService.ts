@@ -1,5 +1,5 @@
 import { db, auth } from '../firebase';
-import { Rabbit, RabbitStatus, Sex, Transaction, TransactionType, Hutch, Crossing, CrossingStatus, Delivery, Sale, Farm, UserProfile, MedicalRecord, HutchOccupancy, AppNotification } from '../types';
+import { Rabbit, RabbitStatus, Sex, Transaction, TransactionType, Hutch, Crossing, CrossingStatus, Delivery, Sale, Farm, UserProfile, MedicalRecord, HutchOccupancy, AppNotification, WeightRecord } from '../types';
 
 // Default Settings Fallback
 const DEFAULT_SETTINGS = {
@@ -18,7 +18,8 @@ let MOCK_STORE: any = {
   crossings: [],
   medical: [],
   occupancy: [],
-  notifications: []
+  notifications: [],
+  weights: []
 };
 
 // Check if we are in Demo Mode (auth.currentUser is null but we proceeded)
@@ -59,7 +60,8 @@ const convertDoc = (doc: any): any => {
     'date',
     'nextDueDate',
     'startAt',
-    'endAt'
+    'endAt',
+    'createdAt'
   ];
 
   dateFields.forEach(field => {
@@ -225,6 +227,7 @@ export const FarmService = {
     history: HutchOccupancy[];
     pedigree: { sire?: Rabbit, doe?: Rabbit };
     litters: Crossing[];
+    weights: WeightRecord[];
   }> {
     if (isDemoMode()) {
        const rabbit = MOCK_STORE.rabbits.find((r: any) => r.id === rabbitId);
@@ -233,6 +236,7 @@ export const FarmService = {
            offspring: [], 
            medical: MOCK_STORE.medical.filter((m: any) => m.rabbitId === rabbit.tag),
            history: MOCK_STORE.occupancy.filter((o: any) => o.rabbitId === rabbit.id),
+           weights: MOCK_STORE.weights.filter((w: any) => w.rabbitId === rabbit.tag),
            pedigree: {},
            litters: []
        };
@@ -249,7 +253,7 @@ export const FarmService = {
     // 2. Parallel Fetching
     // Removed .orderBy() to avoid needing composite indexes in Firestore.
     // Sorting will be done in-memory below.
-    const [medicalSnap, historySnap, offspringSnap, littersSnap] = await Promise.all([
+    const [medicalSnap, historySnap, offspringSnap, littersSnap, weightSnap] = await Promise.all([
         db.collection(`farms/${farmId}/medical`).where('rabbitId', '==', rabbit.tag).get(),
         db.collection(`farms/${farmId}/hutchOccupancy`).where('rabbitId', '==', rabbitId).get(),
         // Finding offspring: where parentage.doeId or sireId matches this rabbit's tag
@@ -263,7 +267,8 @@ export const FarmService = {
             rabbit.sex === Sex.Female ? 'doeId' : 'sireId',
             '==',
             rabbit.tag
-        ).get()
+        ).get(),
+        db.collection(`farms/${farmId}/weights`).where('rabbitId', '==', rabbit.tag).get()
     ]);
 
     // 3. Fetch Parents (Pedigree)
@@ -287,6 +292,8 @@ export const FarmService = {
         offspring: offspringSnap.docs.map(doc => convertDoc(doc) as Rabbit),
         litters: littersSnap.docs.map(doc => convertDoc(doc) as Crossing)
             .sort((a, b) => new Date(b.dateOfCrossing).getTime() - new Date(a.dateOfCrossing).getTime()),
+        weights: weightSnap.docs.map(doc => convertDoc(doc) as WeightRecord)
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()), // Oldest first for Chart
         pedigree: { sire, doe }
     };
   },
@@ -325,7 +332,6 @@ export const FarmService = {
     isPurchase: boolean,
     kitCount: number = 1
   ): Promise<void> {
-    // Legacy single/simple add function
     const userId = getUserId();
     const farmId = getFarmId();
     const timestamp = new Date();
@@ -368,6 +374,22 @@ export const FarmService = {
       };
 
       batch.set(newRabbitRef, docData);
+
+      // Initial Weight Record
+      if (rabbitData.weight && rabbitData.weight > 0) {
+        const weightRef = db.collection(`farms/${farmId}/weights`).doc();
+        batch.set(weightRef, {
+            id: weightRef.id,
+            rabbitId: finalTag,
+            weight: rabbitData.weight,
+            unit: 'kg',
+            date: timestamp.toISOString(),
+            ageAtRecord: 'Initial',
+            notes: 'Initial weight on entry',
+            farmId: farmId,
+            ownerUid: userId
+        });
+      }
 
       // Simple Transaction logic for purchases
       if (isPurchase && i === 0 && rabbitData.purchaseCost && rabbitData.purchaseCost > 0) {
@@ -1054,6 +1076,55 @@ export const FarmService = {
      }
 
      await batch.commit();
+  },
+
+  // --- Weight Records ---
+
+  async addWeightRecord(rabbitId: string, weight: number, date: string, ageAtRecord: string, notes?: string): Promise<void> {
+      const userId = getUserId();
+      const farmId = getFarmId();
+      
+      if (isDemoMode()) {
+          MOCK_STORE.weights.push({
+              id: 'wt-' + Math.random(),
+              rabbitId,
+              weight,
+              date,
+              ageAtRecord,
+              unit: 'kg',
+              notes,
+              farmId: 'demo'
+          });
+          // Update rabbit weight in mock store
+          const r = MOCK_STORE.rabbits.find((rb: any) => rb.tag === rabbitId);
+          if (r) r.weight = weight;
+          return;
+      }
+
+      const batch = db.batch();
+      
+      // 1. Create Weight Record
+      const weightRef = db.collection(`farms/${farmId}/weights`).doc();
+      batch.set(weightRef, {
+          id: weightRef.id,
+          rabbitId, // Tag
+          weight,
+          unit: 'kg',
+          date: new Date(date).toISOString(),
+          ageAtRecord,
+          notes: notes || '',
+          farmId,
+          ownerUid: userId
+      });
+
+      // 2. Update Rabbit Latest Weight
+      // Find rabbit by tag first since rabbitId in weights is the tag (as per types)
+      const rabbitQuery = await db.collection(`farms/${farmId}/rabbits`).where('tag', '==', rabbitId).get();
+      if (!rabbitQuery.empty) {
+          batch.update(rabbitQuery.docs[0].ref, { weight: weight, updatedAt: new Date() });
+      }
+
+      await batch.commit();
   },
 
   // --- Notifications ---
