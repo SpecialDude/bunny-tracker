@@ -59,6 +59,7 @@ export interface Farm {
   defaultWeaningDays: number;
   defaultPalpationDays: number;
   breeds: Breed[];
+  transactionCategories: string[];
   createdAt: any; 
 }
 

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Save, User, Settings as SettingsIcon, Database, Download, AlertTriangle, Loader2, List, Trash2, Plus } from 'lucide-react';
+import { Save, User, Settings as SettingsIcon, Database, Download, AlertTriangle, Loader2, List, Trash2, Plus, DollarSign } from 'lucide-react';
 import { FarmService } from '../services/farmService';
 import { Farm, Breed } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -13,12 +13,15 @@ export const Settings: React.FC = () => {
   const { refreshFarm } = useFarm();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'biological' | 'breeds' | 'data'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'biological' | 'breeds' | 'financials' | 'data'>('general');
   const [farmSettings, setFarmSettings] = useState<Farm | null>(null);
 
   // New Breed State
   const [newBreedName, setNewBreedName] = useState('');
   const [newBreedCode, setNewBreedCode] = useState('');
+
+  // New Category State
+  const [newCategory, setNewCategory] = useState('');
 
   useEffect(() => {
     loadSettings();
@@ -99,6 +102,52 @@ export const Settings: React.FC = () => {
     }
   };
 
+  const handleAddCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCategory || !farmSettings) return;
+
+    const currentCats = farmSettings.transactionCategories || [];
+    if (currentCats.includes(newCategory)) {
+        showToast("Category already exists", 'error');
+        return;
+    }
+
+    const updatedCats = [...currentCats, newCategory];
+    const updatedFarm = { ...farmSettings, transactionCategories: updatedCats };
+
+    setFarmSettings(updatedFarm);
+    setNewCategory('');
+
+    try {
+        await FarmService.updateFarmSettings(updatedFarm);
+        await refreshFarm();
+        showToast("Category added", 'success');
+    } catch {
+        showToast("Failed to add category", 'error');
+    }
+  };
+
+  const handleDeleteCategory = async (cat: string) => {
+      const confirm = await showConfirm({
+         title: 'Delete Category',
+         message: 'Are you sure? This will remove it from the selection list.',
+         variant: 'danger'
+     });
+     if (!confirm || !farmSettings) return;
+
+     const updatedCats = (farmSettings.transactionCategories || []).filter(c => c !== cat);
+     const updatedFarm = { ...farmSettings, transactionCategories: updatedCats };
+     setFarmSettings(updatedFarm);
+
+     try {
+        await FarmService.updateFarmSettings(updatedFarm);
+        await refreshFarm();
+        showToast("Category removed", 'success');
+    } catch {
+        showToast("Failed to remove category", 'error');
+    }
+  };
+
   const handleExport = async () => {
     try {
       const data = await FarmService.exportFarmData();
@@ -153,6 +202,14 @@ export const Settings: React.FC = () => {
             }`}
           >
             <List size={18} /> Breeds
+          </button>
+          <button
+            onClick={() => setActiveTab('financials')}
+            className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition-colors whitespace-nowrap ${
+              activeTab === 'financials' ? 'bg-white border-t-2 border-t-farm-600 text-farm-800' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <DollarSign size={18} /> Financials
           </button>
           <button
             onClick={() => setActiveTab('data')}
@@ -360,6 +417,71 @@ export const Settings: React.FC = () => {
                                             </td>
                                         </tr>
                                     )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+             </div>
+          )}
+
+          {activeTab === 'financials' && (
+             <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Add Form */}
+                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 h-fit">
+                        <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                            <Plus size={16}/> Add Category
+                        </h4>
+                        <form onSubmit={handleAddCategory} className="space-y-3">
+                            <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">Category Name</label>
+                                <input
+                                    required
+                                    type="text"
+                                    value={newCategory}
+                                    onChange={e => setNewCategory(e.target.value)}
+                                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-farm-500 outline-none"
+                                    placeholder="e.g. Repairs"
+                                />
+                            </div>
+                            <button
+                                type="submit"
+                                className="w-full py-2 bg-farm-600 text-white rounded-lg font-medium text-sm hover:bg-farm-700"
+                            >
+                                Add Category
+                            </button>
+                        </form>
+                    </div>
+
+                    {/* Category List */}
+                    <div className="md:col-span-2">
+                        <h4 className="font-bold text-gray-800 mb-3">Transaction Categories</h4>
+                        <p className="text-sm text-gray-500 mb-4">Categories used for income and expenses tracking.</p>
+                        
+                        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                            <table className="w-full text-left text-sm">
+                                <thead className="bg-gray-50 border-b border-gray-100">
+                                    <tr>
+                                        <th className="px-4 py-3 font-semibold text-gray-700">Category Name</th>
+                                        <th className="px-4 py-3 text-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {farmSettings.transactionCategories?.map((cat) => (
+                                        <tr key={cat} className="hover:bg-gray-50">
+                                            <td className="px-4 py-3 text-gray-900">{cat}</td>
+                                            <td className="px-4 py-3 text-right">
+                                                <button 
+                                                    onClick={() => handleDeleteCategory(cat)}
+                                                    className="text-gray-400 hover:text-red-600 p-1"
+                                                    title="Remove Category"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
                                 </tbody>
                             </table>
                         </div>

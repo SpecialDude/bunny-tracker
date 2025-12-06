@@ -18,6 +18,11 @@ const DEFAULT_BREEDS: Breed[] = [
   { name: 'Local / Mixed', code: 'LOC' }
 ];
 
+const DEFAULT_TRANSACTION_CATEGORIES = [
+  'Feed', 'Medication', 'Equipment', 'Maintenance', 
+  'Utilities', 'Labor', 'Livestock Purchase', 'Rabbit Sale', 'Other'
+];
+
 // --- MOCK STORAGE FOR DEMO MODE ---
 // If the user is in "Demo Mode", we use this in-memory store instead of Firestore
 let MOCK_STORE: any = {
@@ -125,6 +130,7 @@ export const FarmService = {
          defaultWeaningDays: 35,
          defaultPalpationDays: 14,
          breeds: DEFAULT_BREEDS,
+         transactionCategories: DEFAULT_TRANSACTION_CATEGORIES,
          createdAt: new Date()
        };
     }
@@ -139,9 +145,12 @@ export const FarmService = {
         const doc = await db.collection('farms').doc(farmId).get();
         if (doc.exists) {
           const data = convertDoc(doc) as Farm;
-          // Ensure breeds exist for older data
+          // Ensure defaults exist for older data
           if (!data.breeds) {
               data.breeds = DEFAULT_BREEDS;
+          }
+          if (!data.transactionCategories) {
+              data.transactionCategories = DEFAULT_TRANSACTION_CATEGORIES;
           }
           return data;
         }
@@ -172,6 +181,7 @@ export const FarmService = {
       defaultWeaningDays: DEFAULT_SETTINGS.weaningDays,
       defaultPalpationDays: DEFAULT_SETTINGS.palpationDays,
       breeds: DEFAULT_BREEDS,
+      transactionCategories: DEFAULT_TRANSACTION_CATEGORIES,
       createdAt: new Date(),
       updatedAt: new Date()
     });
@@ -194,6 +204,7 @@ export const FarmService = {
       defaultWeaningDays: DEFAULT_SETTINGS.weaningDays,
       defaultPalpationDays: DEFAULT_SETTINGS.palpationDays,
       breeds: DEFAULT_BREEDS,
+      transactionCategories: DEFAULT_TRANSACTION_CATEGORIES,
       createdAt: new Date()
     };
   },

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { X, DollarSign, Save } from 'lucide-react';
 import { FarmService } from '../services/farmService';
@@ -11,21 +12,24 @@ interface Props {
   onSuccess: () => void;
 }
 
-const CATEGORIES = [
-  'Feed', 'Medication', 'Equipment', 'Maintenance', 'Utilities', 'Labor', 'Other'
-];
-
 export const TransactionFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
   const { showToast } = useAlert();
-  const { currencySymbol } = useFarm();
+  const { currencySymbol, transactionCategories } = useFarm();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     type: TransactionType.Expense,
-    category: 'Feed',
+    category: '',
     amount: '',
     date: new Date().toISOString().split('T')[0],
     notes: ''
   });
+
+  // Set default category when modal opens or categories load
+  React.useEffect(() => {
+     if (isOpen && transactionCategories.length > 0 && !formData.category) {
+         setFormData(prev => ({ ...prev, category: transactionCategories[0] }));
+     }
+  }, [isOpen, transactionCategories]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,7 +50,7 @@ export const TransactionFormModal: React.FC<Props> = ({ isOpen, onClose, onSucce
       // Reset
       setFormData({
         type: TransactionType.Expense,
-        category: 'Feed',
+        category: transactionCategories[0] || '',
         amount: '',
         date: new Date().toISOString().split('T')[0],
         notes: ''
@@ -137,7 +141,7 @@ export const TransactionFormModal: React.FC<Props> = ({ isOpen, onClose, onSucce
               onChange={e => setFormData({...formData, category: e.target.value})}
               className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
             >
-              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              {transactionCategories.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
 
