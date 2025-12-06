@@ -13,6 +13,7 @@ export const Settings: React.FC = () => {
   const { refreshFarm } = useFarm();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [activeTab, setActiveTab] = useState<'general' | 'biological' | 'breeds' | 'financials' | 'data'>('general');
   const [farmSettings, setFarmSettings] = useState<Farm | null>(null);
 
@@ -166,6 +167,32 @@ export const Settings: React.FC = () => {
     }
   };
 
+  const handleResetAccount = async () => {
+    const confirmed = await showConfirm({
+        title: 'Reset Farm Data?',
+        message: 'DANGER: This will permanently delete ALL rabbits, breeding records, hutches, and transactions. This action cannot be undone. Are you absolutely sure?',
+        confirmText: 'Yes, Wipe Everything',
+        variant: 'danger'
+    });
+
+    if (!confirmed) return;
+
+    // Double confirmation
+    const doubleCheck = window.confirm("Final Warning: You are about to wipe your entire farm database. Proceed?");
+    if (!doubleCheck) return;
+
+    setResetting(true);
+    try {
+        await FarmService.resetFarmAccount();
+        showToast("Account reset successfully. The page will reload.", 'success');
+        setTimeout(() => window.location.reload(), 1500);
+    } catch (error) {
+        console.error(error);
+        showToast("Failed to reset account. Please try again.", 'error');
+        setResetting(false);
+    }
+  };
+
   if (loading) return <div className="flex justify-center p-8"><Loader2 className="animate-spin text-farm-600" /></div>;
   if (!farmSettings) return <div className="p-8 text-center text-red-500">Failed to load configuration.</div>;
 
@@ -266,7 +293,6 @@ export const Settings: React.FC = () => {
                     <option value="Africa/Lagos">West Africa Time (Lagos)</option>
                     <option value="America/New_York">Eastern Time (US)</option>
                     <option value="Europe/London">London</option>
-                    {/* Add more as needed */}
                   </select>
                 </div>
               </div>
@@ -522,11 +548,11 @@ export const Settings: React.FC = () => {
                     </p>
                   </div>
                   <button
-                    disabled
-                    className="px-4 py-2 bg-white border border-red-300 rounded-lg text-sm font-medium text-red-400 cursor-not-allowed opacity-70"
-                    title="Disabled for safety in this version"
+                    onClick={handleResetAccount}
+                    disabled={resetting}
+                    className="px-4 py-2 bg-white border border-red-300 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
                   >
-                    Reset Account
+                    {resetting ? 'Reseting...' : 'Reset Account'}
                   </button>
                 </div>
               </div>

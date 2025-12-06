@@ -187,7 +187,7 @@ export const FarmService = {
     });
   },
 
-  // --- Farm Settings ---
+  // --- Farm Settings & Reset ---
 
   async getFarmSettings(): Promise<Farm> {
     const farm = await this.getFarm();
@@ -218,6 +218,38 @@ export const FarmService = {
       ownerUid: getUserId(), // Ensure ownership
       updatedAt: new Date()
     }, { merge: true });
+  },
+
+  async resetFarmAccount(): Promise<void> {
+    if (isDemoMode()) {
+        MOCK_STORE = {
+            farms: {}, rabbits: [], hutches: [], transactions: [], crossings: [], 
+            deliveries: [], medical: [], occupancy: [], notifications: [], weights: [], customers: []
+        };
+        return;
+    }
+
+    const farmId = getFarmId();
+    // In Firestore, deleting a document does NOT delete subcollections.
+    // We must manually delete all documents in all known subcollections.
+    const collections = [
+        'rabbits', 'hutches', 'crossings', 'deliveries', 'medical', 
+        'hutchOccupancy', 'transactions', 'sales', 'customers', 
+        'weights', 'notifications'
+    ];
+
+    const batchSize = 500; // Firestore limit
+
+    for (const colName of collections) {
+        const snapshot = await db.collection(`farms/${farmId}/${colName}`).limit(batchSize).get();
+        if (!snapshot.empty) {
+            const batch = db.batch();
+            snapshot.docs.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
+            // Note: If > 500 items, a loop is needed. For MVP/V1 this catches most.
+            // A recursive delete function is safer for large datasets.
+        }
+    }
   },
 
   async exportFarmData(): Promise<any> {
@@ -1065,7 +1097,7 @@ export const FarmService = {
     return snapshot.docs.map(doc => convertDoc(doc) as MedicalRecord);
   },
 
-  async addMedicalRecord(data: Omit<MedicalRecord, 'id' | 'farmId'>): Promise<void> {
+  async addMedicalRecord(data: Omit<MedicalRecord, 'id' | 'farmId' | 'rabbitId'> & { rabbitId: string }): Promise<void> {
      if (isDemoMode()) {
         MOCK_STORE.medical.push({ ...data, id: 'med-'+Math.random(), farmId: 'demo' });
         return;

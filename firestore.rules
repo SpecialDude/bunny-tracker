@@ -1,1 +1,40 @@
-��^
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    function isFarmOwner(farmData) {
+      return isSignedIn() && farmData.ownerUid == request.auth.uid;
+    }
+
+    // 1. User Profiles
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // 2. Farms Collection
+    match /farms/{farmId} {
+      // Allow create if the new doc's ownerUid matches the user
+      allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
+      // Allow read/update/delete if the existing doc's ownerUid matches
+      allow read, update, delete: if isFarmOwner(resource.data);
+
+      // 3. Subcollections (Rabbits, Hutches, etc.)
+      // These are nested under /farms/{farmId}/...
+      // We check parent farm ownership implicitly via the path or explicitly on the doc
+      
+      match /{collection}/{docId} {
+        allow read, write: if isSignedIn() && 
+                           get(/databases/$(database)/documents/farms/$(farmId)).data.ownerUid == request.auth.uid;
+      }
+    }
+  }
+}
