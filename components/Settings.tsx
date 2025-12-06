@@ -1,19 +1,24 @@
+
 import React, { useState, useEffect } from 'react';
-import { Save, User, Settings as SettingsIcon, Database, Download, AlertTriangle, Loader2 } from 'lucide-react';
+import { Save, User, Settings as SettingsIcon, Database, Download, AlertTriangle, Loader2, List, Trash2, Plus } from 'lucide-react';
 import { FarmService } from '../services/farmService';
-import { Farm } from '../types';
+import { Farm, Breed } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
 import { useFarm } from '../contexts/FarmContext';
 
 export const Settings: React.FC = () => {
   const { user } = useAuth();
-  const { showToast } = useAlert();
+  const { showToast, showConfirm } = useAlert();
   const { refreshFarm } = useFarm();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'biological' | 'data'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'biological' | 'breeds' | 'data'>('general');
   const [farmSettings, setFarmSettings] = useState<Farm | null>(null);
+
+  // New Breed State
+  const [newBreedName, setNewBreedName] = useState('');
+  const [newBreedCode, setNewBreedCode] = useState('');
 
   useEffect(() => {
     loadSettings();
@@ -47,6 +52,53 @@ export const Settings: React.FC = () => {
     }
   };
 
+  const handleAddBreed = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBreedName || !newBreedCode || !farmSettings) return;
+
+    if (newBreedCode.length < 2 || newBreedCode.length > 4) {
+      showToast("Code must be 2-4 characters long", 'error');
+      return;
+    }
+
+    const updatedBreeds = [...(farmSettings.breeds || []), { name: newBreedName, code: newBreedCode.toUpperCase() }];
+    const updatedFarm = { ...farmSettings, breeds: updatedBreeds };
+    
+    setFarmSettings(updatedFarm);
+    setNewBreedName('');
+    setNewBreedCode('');
+
+    // Auto-save for smooth UX
+    try {
+        await FarmService.updateFarmSettings(updatedFarm);
+        await refreshFarm();
+        showToast("Breed added", 'success');
+    } catch {
+        showToast("Failed to add breed", 'error');
+    }
+  };
+
+  const handleDeleteBreed = async (code: string) => {
+     const confirm = await showConfirm({
+         title: 'Delete Breed',
+         message: 'Are you sure? This will remove it from the selection list, but existing rabbits will stay unchanged.',
+         variant: 'danger'
+     });
+     if (!confirm || !farmSettings) return;
+
+     const updatedBreeds = farmSettings.breeds.filter(b => b.code !== code);
+     const updatedFarm = { ...farmSettings, breeds: updatedBreeds };
+     setFarmSettings(updatedFarm);
+
+     try {
+        await FarmService.updateFarmSettings(updatedFarm);
+        await refreshFarm();
+        showToast("Breed removed", 'success');
+    } catch {
+        showToast("Failed to remove breed", 'error');
+    }
+  };
+
   const handleExport = async () => {
     try {
       const data = await FarmService.exportFarmData();
@@ -77,10 +129,10 @@ export const Settings: React.FC = () => {
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         {/* Tabs */}
-        <div className="flex border-b border-gray-100 bg-gray-50">
+        <div className="flex border-b border-gray-100 bg-gray-50 overflow-x-auto">
           <button
             onClick={() => setActiveTab('general')}
-            className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition-colors ${
+            className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition-colors whitespace-nowrap ${
               activeTab === 'general' ? 'bg-white border-t-2 border-t-farm-600 text-farm-800' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
@@ -88,19 +140,27 @@ export const Settings: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('biological')}
-            className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition-colors ${
+            className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition-colors whitespace-nowrap ${
               activeTab === 'biological' ? 'bg-white border-t-2 border-t-farm-600 text-farm-800' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
             <SettingsIcon size={18} /> Breeding Defaults
           </button>
           <button
+            onClick={() => setActiveTab('breeds')}
+            className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition-colors whitespace-nowrap ${
+              activeTab === 'breeds' ? 'bg-white border-t-2 border-t-farm-600 text-farm-800' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <List size={18} /> Breeds
+          </button>
+          <button
             onClick={() => setActiveTab('data')}
-            className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition-colors ${
+            className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition-colors whitespace-nowrap ${
               activeTab === 'data' ? 'bg-white border-t-2 border-t-farm-600 text-farm-800' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            <Database size={18} /> Data Management
+            <Database size={18} /> Data
           </button>
         </div>
 
@@ -220,6 +280,92 @@ export const Settings: React.FC = () => {
                 </button>
               </div>
             </form>
+          )}
+
+          {activeTab === 'breeds' && (
+             <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Add Form */}
+                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 h-fit">
+                        <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                            <Plus size={16}/> Add New Breed
+                        </h4>
+                        <form onSubmit={handleAddBreed} className="space-y-3">
+                            <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">Breed Name</label>
+                                <input
+                                    required
+                                    type="text"
+                                    value={newBreedName}
+                                    onChange={e => setNewBreedName(e.target.value)}
+                                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-farm-500 outline-none"
+                                    placeholder="e.g. Flemish Giant"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">Code (2-4 Letters)</label>
+                                <input
+                                    required
+                                    type="text"
+                                    maxLength={4}
+                                    minLength={2}
+                                    value={newBreedCode}
+                                    onChange={e => setNewBreedCode(e.target.value.toUpperCase())}
+                                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-farm-500 outline-none uppercase font-mono"
+                                    placeholder="e.g. FLE"
+                                />
+                                <p className="text-xs text-gray-400 mt-1">Used for tag generation (e.g. SN-FLE-001)</p>
+                            </div>
+                            <button
+                                type="submit"
+                                className="w-full py-2 bg-farm-600 text-white rounded-lg font-medium text-sm hover:bg-farm-700"
+                            >
+                                Add Breed
+                            </button>
+                        </form>
+                    </div>
+
+                    {/* Breed List */}
+                    <div className="md:col-span-2">
+                        <h4 className="font-bold text-gray-800 mb-3">Managed Breeds</h4>
+                        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                            <table className="w-full text-left text-sm">
+                                <thead className="bg-gray-50 border-b border-gray-100">
+                                    <tr>
+                                        <th className="px-4 py-3 font-semibold text-gray-700">Name</th>
+                                        <th className="px-4 py-3 font-semibold text-gray-700">Code</th>
+                                        <th className="px-4 py-3 text-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {farmSettings.breeds?.map((breed) => (
+                                        <tr key={breed.code} className="hover:bg-gray-50">
+                                            <td className="px-4 py-3 text-gray-900">{breed.name}</td>
+                                            <td className="px-4 py-3 font-mono text-gray-600">{breed.code}</td>
+                                            <td className="px-4 py-3 text-right">
+                                                <button 
+                                                    onClick={() => handleDeleteBreed(breed.code)}
+                                                    className="text-gray-400 hover:text-red-600 p-1"
+                                                    title="Remove Breed"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {(!farmSettings.breeds || farmSettings.breeds.length === 0) && (
+                                        <tr>
+                                            <td colSpan={3} className="px-4 py-8 text-center text-gray-400">
+                                                No breeds configured. Add one to get started.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+             </div>
           )}
 
           {activeTab === 'data' && (

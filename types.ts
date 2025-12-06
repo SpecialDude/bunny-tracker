@@ -44,6 +44,11 @@ export interface UserProfile {
   lastLogin: string;
 }
 
+export interface Breed {
+  name: string;
+  code: string; // Short code for ID generation e.g. 'REX'
+}
+
 export interface Farm {
   farmId: string;
   name: string;
@@ -53,6 +58,7 @@ export interface Farm {
   defaultGestationDays: number;
   defaultWeaningDays: number;
   defaultPalpationDays: number;
+  breeds: Breed[];
   createdAt: any; 
 }
 

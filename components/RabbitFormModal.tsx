@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { X, Save, Wand2, DollarSign, Baby, ShoppingBag, AlertTriangle, ArrowUpCircle, List, ArrowRight, Scale, RefreshCw } from 'lucide-react';
 import { Rabbit, RabbitStatus, Sex, Hutch, Crossing, CrossingStatus } from '../types';
@@ -25,7 +26,7 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
   isOpen, onClose, onSuccess, initialData 
 }) => {
   const { showToast } = useAlert();
-  const { currencySymbol } = useFarm();
+  const { currencySymbol, breeds } = useFarm();
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'Born' | 'Purchased'>('Born');
   const [step, setStep] = useState<'details' | 'review_kits'>('details');
@@ -39,7 +40,7 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
   const [formData, setFormData] = useState<Partial<Rabbit>>({
     tag: '',
     name: '',
-    breed: 'Rex',
+    breed: breeds[0]?.name || 'Rex',
     sex: Sex.Female,
     status: RabbitStatus.Alive,
     dateOfBirth: new Date().toISOString().split('T')[0],
@@ -84,7 +85,7 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
         setFormData({
           tag: '',
           name: '',
-          breed: 'Rex',
+          breed: breeds[0]?.name || 'Rex',
           sex: Sex.Female,
           status: RabbitStatus.Alive,
           dateOfBirth: new Date().toISOString().split('T')[0],
@@ -104,7 +105,7 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
       setStep('details');
       setKits([]);
     }
-  }, [initialData, isOpen]);
+  }, [initialData, isOpen, breeds]);
 
   // Handle Mating Record Selection
   const handleLitterChange = (crossingId: string) => {
@@ -147,7 +148,13 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
 
   const generateTag = async () => {
     if (!formData.breed) return;
-    const tag = await FarmService.generateNextTag(formData.breed);
+    
+    // Find the code associated with this breed name
+    const breedObj = breeds.find(b => b.name === formData.breed);
+    // If not found (legacy data), take first 3 chars
+    const code = breedObj ? breedObj.code : formData.breed.substring(0,3).toUpperCase();
+
+    const tag = await FarmService.generateNextTag(code);
     setFormData(prev => ({ ...prev, tag }));
   };
 
@@ -272,7 +279,11 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
       
       // Auto-regenerate Tag based on new breed code
       try {
-          const newTag = await FarmService.generateNextTag(newBreed);
+          // Find code
+          const breedObj = breeds.find(b => b.name === newBreed);
+          const code = breedObj ? breedObj.code : newBreed.substring(0,3).toUpperCase();
+          
+          const newTag = await FarmService.generateNextTag(code);
           // Append index suffix to prevent conflict if user changes multiple to same breed sequentially
           // (Simple heuristic for UI convenience)
           newKits[index].tag = `${newTag}-${index+1}`; 
@@ -466,12 +477,9 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
                         onChange={e => setFormData({...formData, breed: e.target.value})}
                         className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-farm-500 outline-none"
                         >
-                        <option value="Rex">Rex</option>
-                        <option value="New Zealand">New Zealand</option>
-                        <option value="California">California</option>
-                        <option value="Dutch">Dutch</option>
-                        <option value="Chinchilla">Chinchilla</option>
-                        <option value="Local">Local / Mixed</option>
+                        {breeds.map(b => (
+                            <option key={b.code} value={b.name}>{b.name}</option>
+                        ))}
                         </select>
                     </div>
                     <div>
@@ -637,12 +645,9 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
                                      onChange={e => handleKitBreedChange(idx, e.target.value)}
                                      className="w-full px-2 py-1 bg-white border rounded text-xs"
                                    >
-                                        <option value="Rex">Rex</option>
-                                        <option value="New Zealand">New Zealand</option>
-                                        <option value="California">California</option>
-                                        <option value="Dutch">Dutch</option>
-                                        <option value="Chinchilla">Chinchilla</option>
-                                        <option value="Local">Local</option>
+                                        {breeds.map(b => (
+                                            <option key={b.code} value={b.name}>{b.name}</option>
+                                        ))}
                                    </select>
                                </div>
                            </div>

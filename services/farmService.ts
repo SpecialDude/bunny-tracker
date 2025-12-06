@@ -1,6 +1,6 @@
 
 import { db, auth } from '../firebase';
-import { Rabbit, RabbitStatus, Sex, Transaction, TransactionType, Hutch, Crossing, CrossingStatus, Delivery, Sale, Farm, UserProfile, MedicalRecord, HutchOccupancy, AppNotification, WeightRecord, Customer } from '../types';
+import { Rabbit, RabbitStatus, Sex, Transaction, TransactionType, Hutch, Crossing, CrossingStatus, Delivery, Sale, Farm, UserProfile, MedicalRecord, HutchOccupancy, AppNotification, WeightRecord, Customer, Breed } from '../types';
 
 // Default Settings Fallback
 const DEFAULT_SETTINGS = {
@@ -8,6 +8,15 @@ const DEFAULT_SETTINGS = {
   palpationDays: 14,
   weaningDays: 35
 };
+
+const DEFAULT_BREEDS: Breed[] = [
+  { name: 'Rex', code: 'REX' },
+  { name: 'New Zealand', code: 'NZW' },
+  { name: 'California', code: 'CAL' },
+  { name: 'Dutch', code: 'DUT' },
+  { name: 'Chinchilla', code: 'CHI' },
+  { name: 'Local / Mixed', code: 'LOC' }
+];
 
 // --- MOCK STORAGE FOR DEMO MODE ---
 // If the user is in "Demo Mode", we use this in-memory store instead of Firestore
@@ -115,6 +124,7 @@ export const FarmService = {
          defaultGestationDays: 31,
          defaultWeaningDays: 35,
          defaultPalpationDays: 14,
+         breeds: DEFAULT_BREEDS,
          createdAt: new Date()
        };
     }
@@ -128,7 +138,12 @@ export const FarmService = {
       try {
         const doc = await db.collection('farms').doc(farmId).get();
         if (doc.exists) {
-          return convertDoc(doc) as Farm;
+          const data = convertDoc(doc) as Farm;
+          // Ensure breeds exist for older data
+          if (!data.breeds) {
+              data.breeds = DEFAULT_BREEDS;
+          }
+          return data;
         }
       } catch (err: any) {
         if (err.code === 'permission-denied') return null;
@@ -156,6 +171,7 @@ export const FarmService = {
       defaultGestationDays: DEFAULT_SETTINGS.gestationDays,
       defaultWeaningDays: DEFAULT_SETTINGS.weaningDays,
       defaultPalpationDays: DEFAULT_SETTINGS.palpationDays,
+      breeds: DEFAULT_BREEDS,
       createdAt: new Date(),
       updatedAt: new Date()
     });
@@ -177,6 +193,7 @@ export const FarmService = {
       defaultGestationDays: DEFAULT_SETTINGS.gestationDays,
       defaultWeaningDays: DEFAULT_SETTINGS.weaningDays,
       defaultPalpationDays: DEFAULT_SETTINGS.palpationDays,
+      breeds: DEFAULT_BREEDS,
       createdAt: new Date()
     };
   },
@@ -651,15 +668,16 @@ export const FarmService = {
   },
 
   async generateNextTag(breedCode: string): Promise<string> {
+    const code = breedCode.toUpperCase().substring(0, 3);
     if (isDemoMode()) {
         const count = MOCK_STORE.rabbits.length + 1;
-        return `SN-${breedCode.substring(0,3).toUpperCase()}-${count.toString().padStart(3,'0')}`;
+        return `SN-${code}-${count.toString().padStart(3,'0')}`;
     }
     const farmId = getFarmId();
     const snapshot = await db.collection(`farms/${farmId}/rabbits`).get();
     const count = snapshot.size + 1;
     const seq = count.toString().padStart(3, '0');
-    return `SN-${breedCode.toUpperCase().substring(0,3)}-${seq}`;
+    return `SN-${code}-${seq}`;
   },
 
   // --- Hutches ---
