@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => {
         },
         includeAssets: ['icon.svg'],
         manifest: {
-          name: 'BunnyTrack Manager',
+          name: 'BunnyTrack',
           short_name: 'BunnyTrack',
           description: 'Professional Rabbit Farm Management System',
           theme_color: '#16a34a',
