@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useFarm } from '../contexts/FarmContext';
 import { useNotifications } from '../contexts/NotificationContext';
 import { NotificationPanel } from './NotificationPanel';
+import { InstallPrompt } from './InstallPrompt';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -80,7 +81,9 @@ export const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate
             ))}
           </nav>
 
-          <div className="p-4 border-t border-gray-100">
+          <div className="p-4 border-t border-gray-100 space-y-2">
+            <InstallPrompt />
+            
             <button 
               onClick={logout}
               className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
