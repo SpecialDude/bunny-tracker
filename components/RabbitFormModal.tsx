@@ -69,56 +69,72 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      // Load available hutches
-      FarmService.getHutches().then(setHutches);
-      FarmService.getRabbitsBySex(Sex.Female).then(setDoes);
-      
-      // Load potential parents/litters (Delivered or Pregnant)
-      FarmService.getCrossings().then(data => {
-         // Filter for relevant crossings
-         // Criteria: Delivered, Live > 0
-         // Logic changed: allow even if records created (to enable re-creation flow)
-         const validCrossings = data.filter(c => 
+      const loadData = async () => {
+        try {
+          const [hutchesData, doesData, crossingsData] = await Promise.all([
+             FarmService.getHutches(),
+             FarmService.getRabbitsBySex(Sex.Female),
+             FarmService.getCrossings()
+          ]);
+
+          setHutches(hutchesData);
+          setDoes(doesData);
+
+          const validCrossings = crossingsData.filter(c => 
             ((c.status === CrossingStatus.Delivered || c.status === CrossingStatus.Pregnant) && 
              c.kitsLive && c.kitsLive > 0) ||
             (initialLitterId && c.id === initialLitterId)
-         );
-         setCrossings(validCrossings);
+          );
+          setCrossings(validCrossings);
 
-         if (initialLitterId) {
-             const preSelected = validCrossings.find(c => c.id === initialLitterId);
-             if (preSelected) {
-                 // Trigger selection logic manually since state might not be ready
-                 triggerLitterSelection(preSelected, data, does); // Pass full data to find doe if needed
-             }
-         }
-      });
+          // Handle Initial Data or Reset
+          if (initialData) {
+            setFormData(initialData);
+            setActiveTab(initialData.source || 'Born');
+            setKitCount(1);
+            setSelectedLitterId(initialData.litterId || '');
+            setMotherHutchId(null);
+          } else {
+            // Reset Form for New Entry
+            setFormData({
+              tag: '',
+              name: '',
+              breed: breeds[0]?.name || 'Rex',
+              sex: Sex.Female,
+              status: RabbitStatus.Alive,
+              dateOfBirth: new Date().toISOString().split('T')[0],
+              dateOfAcquisition: new Date().toISOString().split('T')[0],
+              currentHutchId: '',
+              notes: '',
+              purchaseCost: 0,
+              weight: 0,
+              parentage: { sireId: '', doeId: '' }
+            });
+            setKitCount(1);
+            
+            // Handle Pre-selection logic specifically for "Create Records"
+            if (initialLitterId) {
+                setActiveTab('Born');
+                const preSelected = validCrossings.find(c => c.id === initialLitterId);
+                if (preSelected) {
+                    triggerLitterSelection(preSelected, validCrossings, doesData); 
+                } else {
+                    setSelectedLitterId('');
+                    setMotherHutchId(null);
+                }
+            } else {
+                setSelectedLitterId('');
+                setActiveTab('Born');
+                setMotherHutchId(null);
+            }
+          }
+        } catch (err) {
+            console.error("Error loading rabbit form data", err);
+        }
+      };
+
+      loadData();
       
-      if (initialData) {
-        setFormData(initialData);
-        setActiveTab(initialData.source || 'Born');
-        setKitCount(1);
-      } else {
-        // Reset
-        setFormData({
-          tag: '',
-          name: '',
-          breed: breeds[0]?.name || 'Rex',
-          sex: Sex.Female,
-          status: RabbitStatus.Alive,
-          dateOfBirth: new Date().toISOString().split('T')[0],
-          dateOfAcquisition: new Date().toISOString().split('T')[0],
-          currentHutchId: '',
-          notes: '',
-          purchaseCost: 0,
-          weight: 0,
-          parentage: { sireId: '', doeId: '' }
-        });
-        setKitCount(1);
-        setSelectedLitterId('');
-        setActiveTab('Born');
-        setMotherHutchId(null);
-      }
       setExpandCapacity(false);
       setStep('details');
       setKits([]);
@@ -143,9 +159,8 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
   const triggerLitterSelection = (crossing: Crossing, allCrossings: Crossing[], allDoes: Rabbit[]) => {
        setSelectedLitterId(crossing.id!);
        
-       // Look up mother to find breed (inherited) - Try using passed does or fallback to state
-       const doeList = allDoes.length > 0 ? allDoes : does; 
-       const mother = doeList.find(d => d.tag === crossing.doeId);
+       // Look up mother to find breed (inherited)
+       const mother = allDoes.find(d => d.tag === crossing.doeId);
        
        setFormData(prev => ({
          ...prev,
