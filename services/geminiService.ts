@@ -1,12 +1,8 @@
 import { GoogleGenAI } from "@google/genai";
 
-// Safe access to API Key
-const apiKey = (typeof process !== 'undefined' && process.env && process.env.API_KEY) 
-  ? process.env.API_KEY 
-  : '';
-
 // Initialize the Google GenAI SDK
-const ai = new GoogleGenAI({ apiKey });
+// The API key is obtained exclusively from the environment variable process.env.API_KEY
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export interface AIResponse {
   text: string;
@@ -20,7 +16,7 @@ export const askFarmAssistant = async (
   prompt: string,
   context: string
 ): Promise<AIResponse> => {
-  if (!apiKey) {
+  if (!process.env.API_KEY) {
     return { text: "Configuration Error: Gemini API Key is missing. Please set process.env.API_KEY." };
   }
 
@@ -58,7 +54,7 @@ export const askFarmAssistant = async (
  * Uses gemini-2.5-flash with Google Search grounding for real-time market data or vet advice.
  */
 export const searchWeb = async (query: string): Promise<AIResponse> => {
-  if (!apiKey) {
+  if (!process.env.API_KEY) {
     return { text: "Configuration Error: Gemini API Key is missing." };
   }
 
