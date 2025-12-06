@@ -7,20 +7,26 @@ export const InstallPrompt: React.FC = () => {
   const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
-    // Check if already installed
+    // 1. Check if already installed
     if (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone) {
       setIsStandalone(true);
     }
 
-    // Check for iOS
+    // 2. Check for iOS
     const userAgent = window.navigator.userAgent.toLowerCase();
     const ios = /iphone|ipad|ipod/.test(userAgent);
     setIsIOS(ios);
 
-    // Listen for Chrome/Android install event
+    // 3. Check if we captured the event early (in index.tsx)
+    if ((window as any).deferredPrompt) {
+      setDeferredPrompt((window as any).deferredPrompt);
+    }
+
+    // 4. Listen for future events (if we loaded faster than the browser fired it)
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
+      (window as any).deferredPrompt = e;
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -32,10 +38,16 @@ export const InstallPrompt: React.FC = () => {
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
+    
+    // Show the install prompt
     deferredPrompt.prompt();
+    
+    // Wait for the user to respond to the prompt
     const { outcome } = await deferredPrompt.userChoice;
+    
     if (outcome === 'accepted') {
       setDeferredPrompt(null);
+      (window as any).deferredPrompt = null;
     }
   };
 
