@@ -1,5 +1,7 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, X, Send, Search, Brain, Loader2, ExternalLink, RefreshCw } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { askFarmAssistant, searchWeb, AIResponse } from '../services/geminiService';
 import { ChatMessage, RabbitStatus, CrossingStatus, TransactionType } from '../types';
 import { FarmService } from '../services/farmService';
@@ -197,8 +199,18 @@ export const AIChat: React.FC = () => {
                 ? 'bg-farm-600 text-white rounded-br-none' 
                 : 'bg-white text-gray-800 border border-gray-200 rounded-bl-none shadow-sm'
             }`}>
-              <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap">
-                {msg.text}
+              <div className="prose prose-sm max-w-none text-sm break-words">
+                 <ReactMarkdown 
+                    components={{
+                        p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                        ul: ({node, ...props}) => <ul className="list-disc ml-4 mb-2" {...props} />,
+                        ol: ({node, ...props}) => <ol className="list-decimal ml-4 mb-2" {...props} />,
+                        li: ({node, ...props}) => <li className="mb-1" {...props} />,
+                        strong: ({node, ...props}) => <strong className="font-bold" {...props} />
+                    }}
+                 >
+                    {msg.text}
+                 </ReactMarkdown>
               </div>
               
               {/* Grounding Sources */}

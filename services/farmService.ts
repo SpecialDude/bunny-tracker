@@ -679,12 +679,18 @@ export const FarmService = {
   },
 
   async generateNextTag(breedCode: string): Promise<string> {
-    const code = breedCode.toUpperCase().substring(0, 3);
+    // Generate simple sequence code
+    // In a robust system, we might want breed-specific sequences or farm-wide unique.
+    // Here we just use a global counter but prefix with the breed code.
+    const code = breedCode.toUpperCase();
+    
     if (isDemoMode()) {
         const count = MOCK_STORE.rabbits.length + 1;
         return `SN-${code}-${count.toString().padStart(3,'0')}`;
     }
     const farmId = getFarmId();
+    // We get total rabbits to increment sequence. 
+    // Optimization: Store a counter in farm settings or a dedicated counter doc.
     const snapshot = await db.collection(`farms/${farmId}/rabbits`).get();
     const count = snapshot.size + 1;
     const seq = count.toString().padStart(3, '0');

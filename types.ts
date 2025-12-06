@@ -60,7 +60,8 @@ export interface Farm {
   defaultPalpationDays: number;
   breeds: Breed[];
   transactionCategories: string[];
-  createdAt: any; 
+  createdAt: any;
+  updatedAt?: any; 
 }
 
 export interface Hutch {

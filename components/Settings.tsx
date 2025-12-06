@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Save, User, Settings as SettingsIcon, Database, Download, AlertTriangle, Loader2, List, Trash2, Plus, DollarSign } from 'lucide-react';
 import { FarmService } from '../services/farmService';
-import { Farm, Breed } from '../types';
+import { Farm } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
 import { useFarm } from '../contexts/FarmContext';
