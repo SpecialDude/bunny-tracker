@@ -103,6 +103,7 @@ export const FarmService = {
   async syncUser(user: any): Promise<void> {
     if (isDemoMode()) return;
     try {
+      if (!db) throw new Error("DB not initialized");
       const userRef = db.collection('users').doc(user.uid);
       const payload: UserProfile = {
         uid: user.uid,
@@ -139,6 +140,7 @@ export const FarmService = {
     if (!auth.currentUser) return null;
 
     try {
+      if (!db) return null;
       const farmId = getFarmId();
       // Optimization: catch permission-denied errors which mean doc doesn't exist
       try {
@@ -170,6 +172,7 @@ export const FarmService = {
     const farmId = getFarmId();
     
     if (isDemoMode()) return; // Should not happen in demo flow really
+    if (!db) throw new Error("DB not initialized");
 
     await db.collection('farms').doc(farmId).set({
       farmId: farmId,
@@ -211,6 +214,7 @@ export const FarmService = {
 
   async updateFarmSettings(settings: Partial<Farm>): Promise<void> {
     if (isDemoMode()) return;
+    if (!db) throw new Error("DB not initialized");
     const farmId = getFarmId();
     await db.collection('farms').doc(farmId).set({
       ...settings,
@@ -228,6 +232,7 @@ export const FarmService = {
         };
         return;
     }
+    if (!db) throw new Error("DB not initialized");
 
     const farmId = getFarmId();
     // In Firestore, deleting a document does NOT delete subcollections.
@@ -281,6 +286,7 @@ export const FarmService = {
    */
   async getRabbits(): Promise<Rabbit[]> {
     if (isDemoMode()) return MOCK_STORE.rabbits;
+    if (!db) return [];
     try {
       const farmId = getFarmId();
       const snapshot = await db.collection(`farms/${farmId}/rabbits`)
@@ -314,6 +320,7 @@ export const FarmService = {
            litters: []
        };
     }
+    if (!db) throw new Error("DB not initialized");
 
     const farmId = getFarmId();
     
@@ -370,6 +377,7 @@ export const FarmService = {
 
   async getRabbitsBySex(sex: Sex): Promise<Rabbit[]> {
     if (isDemoMode()) return MOCK_STORE.rabbits.filter((r: Rabbit) => r.sex === sex);
+    if (!db) return [];
     try {
       const farmId = getFarmId();
       const snapshot = await db.collection(`farms/${farmId}/rabbits`)
@@ -385,6 +393,7 @@ export const FarmService = {
 
   async getSaleableRabbits(): Promise<Rabbit[]> {
     if (isDemoMode()) return MOCK_STORE.rabbits.filter((r: Rabbit) => ['Alive', 'Weaned', 'Pregnant'].includes(r.status));
+    if (!db) return [];
     try {
       const farmId = getFarmId();
       const snapshot = await db.collection(`farms/${farmId}/rabbits`)
@@ -399,6 +408,7 @@ export const FarmService = {
 
   async getRabbitsByLitterId(litterId: string): Promise<Rabbit[]> {
     if (isDemoMode()) return MOCK_STORE.rabbits.filter((r: Rabbit) => r.litterId === litterId);
+    if (!db) return [];
     try {
       const farmId = getFarmId();
       const snapshot = await db.collection(`farms/${farmId}/rabbits`)
@@ -416,6 +426,7 @@ export const FarmService = {
         MOCK_STORE.rabbits = MOCK_STORE.rabbits.filter((r: Rabbit) => r.litterId !== litterId);
         return;
     }
+    if (!db) throw new Error("DB not initialized");
     const farmId = getFarmId();
     const batch = db.batch();
     
@@ -476,6 +487,7 @@ export const FarmService = {
         }
         return;
     }
+    if (!db) throw new Error("DB not initialized");
 
     const batch = db.batch();
 
@@ -598,6 +610,7 @@ export const FarmService = {
           });
           return;
       }
+      if (!db) throw new Error("DB not initialized");
   
       const batch = db.batch();
 
@@ -667,6 +680,7 @@ export const FarmService = {
        if (r) r.currentHutchId = targetHutchId;
        return;
     }
+    if (!db) throw new Error("DB not initialized");
 
     const batch = db.batch();
     const rabbitRef = db.collection(`farms/${farmId}/rabbits`).doc(rabbitId);
@@ -727,6 +741,7 @@ export const FarmService = {
         if (idx !== -1) MOCK_STORE.rabbits[idx] = { ...MOCK_STORE.rabbits[idx], ...updates };
         return;
     }
+    if (!db) throw new Error("DB not initialized");
     const farmId = getFarmId();
     await db.collection(`farms/${farmId}/rabbits`).doc(id).update({
       ...updates,
@@ -749,6 +764,7 @@ export const FarmService = {
        }
        return;
     }
+    if (!db) throw new Error("DB not initialized");
 
     const userId = getUserId();
     const farmId = getFarmId();
@@ -808,6 +824,7 @@ export const FarmService = {
         const count = MOCK_STORE.rabbits.length + 1;
         return `SN-${code}-${count.toString().padStart(3,'0')}`;
     }
+    if (!db) throw new Error("DB not initialized");
     const farmId = getFarmId();
     // We get total rabbits to increment sequence. 
     // Optimization: Store a counter in farm settings or a dedicated counter doc.
@@ -821,6 +838,7 @@ export const FarmService = {
 
   async getHutches(): Promise<Hutch[]> {
     if (isDemoMode()) return MOCK_STORE.hutches;
+    if (!db) return [];
     const farmId = getFarmId();
     const snapshot = await db.collection(`farms/${farmId}/hutches`)
       .orderBy('number', 'asc')
@@ -834,6 +852,7 @@ export const FarmService = {
         MOCK_STORE.hutches.push({ ...data, id, hutchId: `H${data.number}`, currentOccupancy: 0, farmId: 'demo' });
         return;
     }
+    if (!db) throw new Error("DB not initialized");
     const userId = getUserId();
     const farmId = getFarmId();
     const docRef = db.collection(`farms/${farmId}/hutches`).doc();
@@ -853,6 +872,7 @@ export const FarmService = {
 
   async updateHutch(id: string, updates: Partial<Hutch>): Promise<void> {
     if (isDemoMode()) return;
+    if (!db) throw new Error("DB not initialized");
     const farmId = getFarmId();
     await db.collection(`farms/${farmId}/hutches`).doc(id).update({
       ...updates,
@@ -865,6 +885,7 @@ export const FarmService = {
        MOCK_STORE.hutches = MOCK_STORE.hutches.filter((h: any) => h.id !== id);
        return;
     }
+    if (!db) throw new Error("DB not initialized");
     const farmId = getFarmId();
     const hutchRef = db.collection(`farms/${farmId}/hutches`).doc(id);
     const doc = await hutchRef.get();
@@ -879,6 +900,7 @@ export const FarmService = {
 
   async getCrossings(): Promise<Crossing[]> {
     if (isDemoMode()) return MOCK_STORE.crossings;
+    if (!db) return [];
     const farmId = getFarmId();
     const snapshot = await db.collection(`farms/${farmId}/crossings`)
       .orderBy('dateOfCrossing', 'desc')
@@ -897,6 +919,7 @@ export const FarmService = {
         });
         return;
     }
+    if (!db) throw new Error("DB not initialized");
 
     const userId = getUserId();
     const farmId = getFarmId();
@@ -938,6 +961,7 @@ export const FarmService = {
         if (c) { c.status = status; if(result) c.palpationResult = result; }
         return;
     }
+    if (!db) throw new Error("DB not initialized");
     const farmId = getFarmId();
     const updateData: any = { status, updatedAt: new Date() };
     if (result) updateData.palpationResult = result;
@@ -967,6 +991,7 @@ export const FarmService = {
         if (c) { c.status = CrossingStatus.Delivered; c.kitsBorn = data.kitsBorn; c.kitsLive = data.kitsLive; }
         return;
     }
+    if (!db) throw new Error("DB not initialized");
     const userId = getUserId();
     const farmId = getFarmId();
     const batch = db.batch();
@@ -986,6 +1011,7 @@ export const FarmService = {
 
   async updateDelivery(deliveryId: string, crossingId: string, updates: Partial<Delivery>): Promise<void> {
       if (isDemoMode()) return;
+      if (!db) throw new Error("DB not initialized");
       const farmId = getFarmId();
       const batch = db.batch();
       
@@ -1005,6 +1031,7 @@ export const FarmService = {
 
   async getDeliveryByCrossingId(crossingId: string): Promise<Delivery | null> {
       if (isDemoMode()) return null;
+      if (!db) return null;
       const farmId = getFarmId();
       const snap = await db.collection(`farms/${farmId}/deliveries`).where('crossingId', '==', crossingId).limit(1).get();
       if (snap.empty) return null;
@@ -1015,6 +1042,7 @@ export const FarmService = {
 
   async getCustomers(): Promise<Customer[]> {
     if (isDemoMode()) return MOCK_STORE.customers;
+    if (!db) return [];
     const farmId = getFarmId();
     const snapshot = await db.collection(`farms/${farmId}/customers`).orderBy('totalSpent', 'desc').get();
     return snapshot.docs.map(doc => convertDoc(doc) as Customer);
@@ -1026,6 +1054,7 @@ export const FarmService = {
        MOCK_STORE.customers.push({ ...data, id, totalSpent: 0, farmId: 'demo' });
        return id;
     }
+    if (!db) throw new Error("DB not initialized");
     const userId = getUserId();
     const farmId = getFarmId();
     const docRef = db.collection(`farms/${farmId}/customers`).doc();
@@ -1044,6 +1073,7 @@ export const FarmService = {
 
   async getTransactions(): Promise<Transaction[]> {
     if (isDemoMode()) return MOCK_STORE.transactions;
+    if (!db) return [];
     try {
       const farmId = getFarmId();
       const snapshot = await db.collection(`farms/${farmId}/transactions`).orderBy('date', 'desc').get();
@@ -1059,6 +1089,7 @@ export const FarmService = {
         MOCK_STORE.transactions.push({ ...data, id: 'mock-txn-'+Math.random(), farmId: 'demo' });
         return;
     }
+    if (!db) throw new Error("DB not initialized");
     const userId = getUserId();
     const farmId = getFarmId();
     const docRef = db.collection(`farms/${farmId}/transactions`).doc();
@@ -1078,6 +1109,7 @@ export const FarmService = {
         }
         return;
     }
+    if (!db) throw new Error("DB not initialized");
 
     const userId = getUserId();
     const farmId = getFarmId();
@@ -1172,6 +1204,7 @@ export const FarmService = {
        if (rabbitId) return MOCK_STORE.medical.filter((m: any) => m.rabbitId === rabbitId);
        return MOCK_STORE.medical;
     }
+    if (!db) return [];
     const farmId = getFarmId();
     let query: any = db.collection(`farms/${farmId}/medical`).orderBy('date', 'desc');
     
@@ -1190,6 +1223,7 @@ export const FarmService = {
         MOCK_STORE.medical.push({ ...data, id: 'med-'+Math.random(), farmId: 'demo' });
         return;
      }
+     if (!db) throw new Error("DB not initialized");
      const userId = getUserId();
      const farmId = getFarmId();
      const batch = db.batch();
@@ -1234,6 +1268,7 @@ export const FarmService = {
           if (r) r.weight = weight;
           return;
       }
+      if (!db) throw new Error("DB not initialized");
       const batch = db.batch();
       const weightRef = db.collection(`farms/${farmId}/weights`).doc();
       batch.set(weightRef, { id: weightRef.id, rabbitId, weight, unit: 'kg', date: new Date(date).toISOString(), ageAtRecord, notes: notes || '', farmId, ownerUid: userId });
@@ -1246,6 +1281,7 @@ export const FarmService = {
 
   async getNotifications(limit = 10): Promise<AppNotification[]> {
     if (isDemoMode()) return MOCK_STORE.notifications;
+    if (!db) return [];
     const farmId = getFarmId();
     const snapshot = await db.collection(`farms/${farmId}/notifications`).orderBy('date', 'desc').limit(limit).get();
     return snapshot.docs.map(doc => convertDoc(doc) as AppNotification);
@@ -1257,6 +1293,7 @@ export const FarmService = {
         if (n) n.read = true;
         return;
     }
+    if (!db) throw new Error("DB not initialized");
     const farmId = getFarmId();
     await db.collection(`farms/${farmId}/notifications`).doc(id).update({ read: true });
   },
@@ -1266,6 +1303,7 @@ export const FarmService = {
         MOCK_STORE.notifications.forEach((n:any) => n.read = true);
         return;
     }
+    if (!db) throw new Error("DB not initialized");
     const farmId = getFarmId();
     const snapshot = await db.collection(`farms/${farmId}/notifications`).where('read', '==', false).get();
     const batch = db.batch();
@@ -1275,12 +1313,15 @@ export const FarmService = {
 
   async runDailyChecks(): Promise<void> {
     if (isDemoMode()) return;
+    if (!db) return; // Silent return if DB is not ready (e.g. strict types in build)
+    
     const farmId = getFarmId();
     const userId = getUserId();
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
     
-    const addNotify = async (key: string, data: Omit<AppNotification, 'id' | 'farmId'>) => {
+    const addNotify = async (data: Omit<AppNotification, 'id' | 'farmId'>) => {
+        if (!db) return;
         const q = await db.collection(`farms/${farmId}/notifications`).where('title', '==', data.title).where('date', '>=', todayStr).get();
         if (q.empty) {
             await db.collection(`farms/${farmId}/notifications`).add({ ...data, farmId, ownerUid: userId, createdAt: new Date(), read: false });
@@ -1294,13 +1335,13 @@ export const FarmService = {
             const diffTime = deliveryDate.getTime() - now.getTime();
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
             if (diffDays <= 3 && diffDays >= 0) {
-                addNotify(`delivery-${c.id}`, { type: 'Urgent', title: `Delivery Due: ${c.doeId}`, message: `Doe ${c.doeId} is expected to deliver in ${diffDays} day(s).`, date: todayStr, read: false, linkTo: 'breeding' });
+                addNotify({ type: 'Urgent', title: `Delivery Due: ${c.doeId}`, message: `Doe ${c.doeId} is expected to deliver in ${diffDays} day(s).`, date: todayStr, read: false, linkTo: 'breeding' });
             }
         }
         if (c.status === CrossingStatus.Pending) {
              const palpDate = new Date(c.expectedPalpationDate);
              if (palpDate <= now) {
-                 addNotify(`palp-${c.id}`, { type: 'Info', title: `Palpation Check: ${c.doeId}`, message: `Check pregnancy for mating with ${c.sireId}.`, date: todayStr, read: false, linkTo: 'breeding' });
+                 addNotify({ type: 'Info', title: `Palpation Check: ${c.doeId}`, message: `Check pregnancy for mating with ${c.sireId}.`, date: todayStr, read: false, linkTo: 'breeding' });
              }
         }
     });
@@ -1311,7 +1352,7 @@ export const FarmService = {
              const dob = new Date(r.dateOfBirth);
              const ageDays = Math.floor((now.getTime() - dob.getTime()) / (1000 * 60 * 60 * 24));
              if (ageDays === 35) {
-                 addNotify(`wean-${r.id}`, { type: 'Warning', title: `Weaning Due: ${r.tag}`, message: `Rabbit ${r.tag} is 35 days old. Ready for weaning.`, date: todayStr, read: false, linkTo: 'rabbits' });
+                 addNotify({ type: 'Warning', title: `Weaning Due: ${r.tag}`, message: `Rabbit ${r.tag} is 35 days old. Ready for weaning.`, date: todayStr, read: false, linkTo: 'rabbits' });
              }
         }
     });
