@@ -1,32 +1,99 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, X, Send, Search, Brain, Loader2, ExternalLink } from 'lucide-react';
+import { MessageSquare, X, Send, Search, Brain, Loader2, ExternalLink, RefreshCw } from 'lucide-react';
 import { askFarmAssistant, searchWeb, AIResponse } from '../services/geminiService';
-import { ChatMessage } from '../types';
+import { ChatMessage, RabbitStatus, CrossingStatus, TransactionType } from '../types';
+import { FarmService } from '../services/farmService';
+import { useFarm } from '../contexts/FarmContext';
 
 export const AIChat: React.FC = () => {
+  const { farmName, currencySymbol } = useFarm();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { id: '1', role: 'model', text: 'Hello! I am your AI Farm Assistant. Ask me about your rabbits, finances, or search the web for prices.' }
+    { id: '1', role: 'model', text: 'Hello! I have access to your farm data. Ask me about upcoming deliveries, weaning tasks, or your finances.' }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [contextLoading, setContextLoading] = useState(false);
+  const [farmContext, setFarmContext] = useState('');
   const [mode, setMode] = useState<'assistant' | 'search'>('assistant');
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  // Mock context data - in a real app, this would come from a Context provider or Store
-  const mockFarmContext = `
-    Farm Name: Sunny Rabbits.
-    Total Rabbits: 45.
-    Breeds: Rex, New Zealand White.
-    Active Pregnancies: 3.
-    Low feed stock alert.
-  `;
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Fetch real data when chat is opened
+  useEffect(() => {
+    if (isOpen) {
+      buildContext();
+    }
+  }, [isOpen]);
+
+  const buildContext = async () => {
+    setContextLoading(true);
+    try {
+      const [rabbits, crossings, transactions] = await Promise.all([
+        FarmService.getRabbits(),
+        FarmService.getCrossings(),
+        FarmService.getTransactions()
+      ]);
+
+      const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
+
+      // 1. Livestock Summary
+      const totalRabbits = rabbits.filter(r => ['Alive', 'Pregnant', 'Weaned'].includes(r.status)).length;
+      const does = rabbits.filter(r => r.sex === 'Female' && r.status === 'Alive').length;
+      const bucks = rabbits.filter(r => r.sex === 'Male' && r.status === 'Alive').length;
+      const kits = rabbits.filter(r => r.status === 'Weaned').length;
+
+      // 2. Breeding / Deliveries
+      const activePregnancies = crossings.filter(c => c.status === CrossingStatus.Pregnant);
+      const dueDeliveries = activePregnancies.map(c => 
+        `- Doe ${c.doeName || c.doeId} mated with ${c.sireName || c.sireId}. Due: ${c.expectedDeliveryDate}`
+      ).join('\n');
+
+      // 3. Weaning Candidates (approx 30-40 days old)
+      const weaningCandidates = rabbits.filter(r => {
+        if (!r.dateOfBirth || r.status !== RabbitStatus.Alive) return false;
+        const ageDays = Math.floor((now.getTime() - new Date(r.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24));
+        return ageDays >= 28 && ageDays <= 45;
+      }).map(r => `- ${r.tag} (${r.breed}), Age: ${Math.floor((now.getTime() - new Date(r.dateOfBirth!).getTime()) / (1000 * 60 * 60 * 24))} days`);
+
+      // 4. Finances
+      const income = transactions.filter(t => t.type === TransactionType.Income).reduce((sum, t) => sum + t.amount, 0);
+      const expense = transactions.filter(t => t.type === TransactionType.Expense).reduce((sum, t) => sum + t.amount, 0);
+      
+      const contextString = `
+        Farm Name: ${farmName}
+        Today's Date: ${todayStr}
+        Currency: ${currencySymbol}
+
+        LIVESTOCK SUMMARY:
+        Total Active: ${totalRabbits}
+        Does: ${does}, Bucks: ${bucks}, Weaned Kits: ${kits}
+
+        UPCOMING DELIVERIES (Pregnant Does):
+        ${dueDeliveries || "No active pregnancies."}
+
+        WEANING CANDIDATES (28-45 days old):
+        ${weaningCandidates.length > 0 ? weaningCandidates.join('\n') : "No rabbits currently ready for weaning."}
+
+        FINANCIAL OVERVIEW (All Time):
+        Total Income: ${income}
+        Total Expenses: ${expense}
+        Net Profit: ${income - expense}
+      `;
+
+      setFarmContext(contextString);
+    } catch (error) {
+      console.error("Error building context:", error);
+    } finally {
+      setContextLoading(false);
+    }
+  };
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -45,7 +112,7 @@ export const AIChat: React.FC = () => {
       let result: AIResponse;
       
       if (mode === 'assistant') {
-        result = await askFarmAssistant(userMsg.text, mockFarmContext);
+        result = await askFarmAssistant(userMsg.text, farmContext);
       } else {
         result = await searchWeb(userMsg.text);
       }
@@ -84,11 +151,19 @@ export const AIChat: React.FC = () => {
       <div className="bg-farm-600 p-4 flex justify-between items-center text-white">
         <div className="flex items-center gap-2">
           <Brain size={20} />
-          <h3 className="font-semibold">Farm Intelligence</h3>
+          <div>
+            <h3 className="font-semibold text-sm">Farm Intelligence</h3>
+            {contextLoading && <span className="text-[10px] opacity-80 flex items-center gap-1"><Loader2 size={8} className="animate-spin"/> Syncing Data...</span>}
+          </div>
         </div>
-        <button onClick={() => setIsOpen(false)} className="hover:bg-farm-700 p-1 rounded">
-          <X size={20} />
-        </button>
+        <div className="flex gap-2">
+            <button onClick={buildContext} className="hover:bg-farm-700 p-1 rounded" title="Refresh Context">
+                <RefreshCw size={16} />
+            </button>
+            <button onClick={() => setIsOpen(false)} className="hover:bg-farm-700 p-1 rounded">
+                <X size={20} />
+            </button>
+        </div>
       </div>
 
       {/* Mode Toggle */}
@@ -100,7 +175,7 @@ export const AIChat: React.FC = () => {
           }`}
         >
           <Brain size={16} />
-          <span>Reasoning</span>
+          <span>My Farm</span>
         </button>
         <button
           onClick={() => setMode('search')}
@@ -155,7 +230,7 @@ export const AIChat: React.FC = () => {
           <div className="flex justify-start">
             <div className="bg-white p-3 rounded-lg rounded-bl-none border shadow-sm flex items-center gap-2 text-sm text-gray-500">
               <Loader2 className="animate-spin" size={16} />
-              {mode === 'assistant' ? 'Thinking deeply...' : 'Searching the web...'}
+              {mode === 'assistant' ? 'Analyzing farm data...' : 'Searching the web...'}
             </div>
           </div>
         )}
@@ -169,7 +244,7 @@ export const AIChat: React.FC = () => {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder={mode === 'assistant' ? "Ask about your rabbits..." : "Search rabbit prices..."}
+            placeholder={mode === 'assistant' ? "E.g. Any weaning due?" : "Search rabbit prices..."}
             className="flex-1 px-4 py-2 bg-white border rounded-full focus:outline-none focus:ring-2 focus:ring-farm-500 text-sm"
           />
           <button

@@ -10,7 +10,8 @@ export interface AIResponse {
 }
 
 /**
- * Uses gemini-3-pro-preview with Thinking capabilities for complex farm management reasoning.
+ * Uses gemini-2.5-flash for fast, cost-effective farm assistance.
+ * It receives a constructed context of the farm's current state.
  */
 export const askFarmAssistant = async (
   prompt: string,
@@ -22,22 +23,27 @@ export const askFarmAssistant = async (
 
   try {
     const fullPrompt = `
-      Context: You are an expert Rabbit Farm Management Consultant.
-      Current Farm Context Data: ${context}
+      SYSTEM INSTRUCTION:
+      You are an expert Rabbit Farm Management Consultant for "BunnyTrack".
       
-      User Question: ${prompt}
+      CURRENT FARM DATA (Real-time Snapshot):
+      ${context}
       
-      Provide a detailed, helpful response. If calculations are needed, explain them.
+      USER QUESTION:
+      ${prompt}
+      
+      GUIDELINES:
+      1. Use the "Current Farm Data" provided above to answer specific questions.
+      2. If asking about deliveries, check the "Upcoming Deliveries" section.
+      3. If asking about weaning, check the "Weaning Candidates" section.
+      4. If asking about finances, use the calculated totals provided.
+      5. Keep answers concise, professional, and helpful.
     `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-2.5-flash',
       contents: fullPrompt,
-      config: {
-        thinkingConfig: {
-          thinkingBudget: 2048, 
-        }
-      }
+      // No thinkingConfig needed for Flash, it is fast by default.
     });
 
     return {
@@ -46,7 +52,7 @@ export const askFarmAssistant = async (
 
   } catch (error) {
     console.error("Error calling Gemini Farm Assistant:", error);
-    return { text: "Sorry, I encountered an error while thinking about your request." };
+    return { text: "Sorry, I encountered an error while analyzing your farm data." };
   }
 };
 
