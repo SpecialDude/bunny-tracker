@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, Plus, MoreHorizontal, Loader2, Rabbit as RabbitIcon, Skull, Stethoscope, ArrowRightLeft, Eye, Scale } from 'lucide-react';
-import { Rabbit, RabbitStatus, Sex } from '../types';
+import { Rabbit, RabbitStatus } from '../types';
 import { FarmService } from '../services/farmService';
 import { RabbitFormModal } from './RabbitFormModal';
 import { MortalityModal } from './MortalityModal';
@@ -21,6 +21,10 @@ export const RabbitList: React.FC<Props> = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('All');
+  
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -45,6 +49,11 @@ export const RabbitList: React.FC<Props> = () => {
   useEffect(() => {
     fetchData();
   }, [viewMode]); // Refresh when coming back from detail view
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterStatus]);
 
   const handleAdd = () => {
     setSelectedRabbit(undefined);
@@ -103,6 +112,7 @@ export const RabbitList: React.FC<Props> = () => {
       return `${Math.floor(days / 30)} months`;
   };
 
+  // Filter Logic
   const filteredRabbits = rabbits.filter(r => {
     const matchesSearch = 
       r.tag.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -112,6 +122,17 @@ export const RabbitList: React.FC<Props> = () => {
 
     return matchesSearch && matchesFilter;
   });
+
+  // Pagination Logic
+  const totalPages = Math.ceil(filteredRabbits.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedRabbits = filteredRabbits.slice(startIndex, startIndex + itemsPerPage);
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+    }
+  };
 
   if (viewMode === 'detail' && detailId) {
       return <RabbitDetail rabbitId={detailId} onBack={() => setViewMode('list')} />;
@@ -189,7 +210,7 @@ export const RabbitList: React.FC<Props> = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filteredRabbits.map((rabbit) => (
+                {paginatedRabbits.map((rabbit) => (
                   <tr key={rabbit.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="font-medium text-gray-900">{rabbit.tag}</div>
@@ -266,10 +287,25 @@ export const RabbitList: React.FC<Props> = () => {
         
         {filteredRabbits.length > 0 && (
           <div className="px-6 py-4 border-t border-gray-100 flex justify-between items-center text-sm text-gray-500">
-            <span>Showing {filteredRabbits.length} of {rabbits.length} rabbits</span>
+            <span>
+                Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredRabbits.length)} of {filteredRabbits.length} rabbits
+                {filteredRabbits.length !== rabbits.length && ` (filtered from ${rabbits.length})`}
+            </span>
             <div className="flex gap-2">
-              <button className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50" disabled>Prev</button>
-              <button className="px-3 py-1 border rounded hover:bg-gray-50" disabled>Next</button>
+              <button 
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                  Prev
+              </button>
+              <button 
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages || totalPages === 0}
+                  className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                  Next
+              </button>
             </div>
           </div>
         )}

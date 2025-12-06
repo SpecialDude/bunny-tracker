@@ -274,6 +274,11 @@ export const FarmService = {
 
   // --- Rabbits ---
 
+  /**
+   * Fetches ALL rabbits to enable client-side filtering and sorting.
+   * Note: For farms with < 2000 rabbits, client-side pagination is more performant 
+   * and allows for instant search/filtering without complex Firestore indexes.
+   */
   async getRabbits(): Promise<Rabbit[]> {
     if (isDemoMode()) return MOCK_STORE.rabbits;
     try {
