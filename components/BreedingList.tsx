@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { Plus, Activity, Calendar, CheckCircle2, XCircle, Baby, Loader2, Edit, ListPlus } from 'lucide-react';
+import { Plus, Activity, Calendar, CheckCircle2, XCircle, Baby, Loader2, Edit, ListPlus, Check, RotateCw } from 'lucide-react';
 import { Crossing, CrossingStatus } from '../types';
 import { FarmService } from '../services/farmService';
 import { CrossingFormModal } from './CrossingFormModal';
@@ -60,14 +61,7 @@ export const BreedingList: React.FC = () => {
 
   // When "Create Rabbit Records" is clicked
   const handleCreateRecords = (crossing: Crossing) => {
-      // We don't pre-set the rabbit form completely here, 
-      // but we could set an initial "selectedLitterId" if we exposed it as a prop.
-      // For now, let's just open the form and let user select the litter, 
-      // OR better, pass it as initialData logic (requires Refactor).
-      // SIMPLIFICATION: Just open modal, user selects litter from dropdown easily.
-      // IMPROVEMENT: We'll modify RabbitFormModal to accept a pre-selected litter ID if needed, 
-      // but standard add flow is fine as long as they pick the mother.
-      // ACTUALLY: Let's assume the user has to pick the litter in the modal.
+      setSelectedCrossing(crossing);
       setIsRabbitModalOpen(true);
   };
 
@@ -203,13 +197,23 @@ export const BreedingList: React.FC = () => {
                                 >
                                     <Edit size={16} />
                                 </button>
-                                <button
-                                    onClick={() => handleCreateRecords(cross)}
-                                    className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 shadow-sm"
-                                    title="Create Rabbit Records for Kits"
-                                >
-                                    <ListPlus size={14} /> Create Records
-                                </button>
+                                {cross.isRecordsCreated ? (
+                                    <button
+                                        onClick={() => handleCreateRecords(cross)}
+                                        className="flex items-center gap-1 px-3 py-1.5 bg-white text-gray-600 text-xs font-medium rounded border border-gray-200 hover:bg-gray-50"
+                                        title="Records already created. Click to re-create or manage."
+                                    >
+                                        <RotateCw size={14} /> Re-create Records
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() => handleCreateRecords(cross)}
+                                        className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 shadow-sm"
+                                        title="Create Rabbit Records for Kits"
+                                    >
+                                        <ListPlus size={14} /> Create Records
+                                    </button>
+                                )}
                             </div>
                         )}
                       </div>
@@ -242,6 +246,7 @@ export const BreedingList: React.FC = () => {
          isOpen={isRabbitModalOpen}
          onClose={() => setIsRabbitModalOpen(false)}
          onSuccess={fetchData}
+         initialLitterId={selectedCrossing?.id}
       />
     </div>
   );

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Save, Wand2, DollarSign, Baby, ShoppingBag, AlertTriangle, ArrowUpCircle, List, ArrowRight, Scale, RefreshCw } from 'lucide-react';
+import { X, Save, Wand2, DollarSign, Baby, ShoppingBag, AlertTriangle, ArrowUpCircle, List, ArrowRight, Scale, Trash2, PlusCircle, AlertCircle } from 'lucide-react';
 import { Rabbit, RabbitStatus, Sex, Hutch, Crossing, CrossingStatus } from '../types';
 import { FarmService } from '../services/farmService';
 import { useAlert } from '../contexts/AlertContext';
@@ -11,6 +11,7 @@ interface RabbitFormModalProps {
   onClose: () => void;
   onSuccess: () => void;
   initialData?: Rabbit;
+  initialLitterId?: string; // Pre-select a litter for 'Create Records'
 }
 
 // Helper to define a Kit in the review stage
@@ -23,18 +24,21 @@ interface KitDraft {
 }
 
 export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({ 
-  isOpen, onClose, onSuccess, initialData 
+  isOpen, onClose, onSuccess, initialData, initialLitterId
 }) => {
   const { showToast } = useAlert();
   const { currencySymbol, breeds } = useFarm();
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'Born' | 'Purchased'>('Born');
-  const [step, setStep] = useState<'details' | 'review_kits'>('details');
+  const [step, setStep] = useState<'details' | 'review_kits' | 'conflict_resolution'>('details');
   
   // Dropdown Data
   const [hutches, setHutches] = useState<Hutch[]>([]);
   const [crossings, setCrossings] = useState<Crossing[]>([]);
   const [does, setDoes] = useState<Rabbit[]>([]); // Keep does for breed lookup
+
+  // Conflict Resolution State
+  const [existingKitsCount, setExistingKitsCount] = useState(0);
 
   // Form State
   const [formData, setFormData] = useState<Partial<Rabbit>>({
@@ -67,15 +71,29 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
     if (isOpen) {
       // Load available hutches
       FarmService.getHutches().then(setHutches);
+      FarmService.getRabbitsBySex(Sex.Female).then(setDoes);
       
       // Load potential parents/litters (Delivered or Pregnant)
       FarmService.getCrossings().then(data => {
          // Filter for relevant crossings
-         setCrossings(data.filter(c => c.status === CrossingStatus.Delivered || c.status === CrossingStatus.Pregnant));
+         // Criteria: Delivered, Live > 0
+         // Logic changed: allow even if records created (to enable re-creation flow)
+         const validCrossings = data.filter(c => 
+            ((c.status === CrossingStatus.Delivered || c.status === CrossingStatus.Pregnant) && 
+             c.kitsLive && c.kitsLive > 0) ||
+            (initialLitterId && c.id === initialLitterId)
+         );
+         setCrossings(validCrossings);
+
+         if (initialLitterId) {
+             const preSelected = validCrossings.find(c => c.id === initialLitterId);
+             if (preSelected) {
+                 // Trigger selection logic manually since state might not be ready
+                 triggerLitterSelection(preSelected, data, does); // Pass full data to find doe if needed
+             }
+         }
       });
       
-      FarmService.getRabbitsBySex(Sex.Female).then(setDoes);
-
       if (initialData) {
         setFormData(initialData);
         setActiveTab(initialData.source || 'Born');
@@ -104,8 +122,9 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
       setExpandCapacity(false);
       setStep('details');
       setKits([]);
+      setExistingKitsCount(0);
     }
-  }, [initialData, isOpen, breeds]);
+  }, [initialData, isOpen, breeds, initialLitterId]);
 
   // Handle Mating Record Selection
   const handleLitterChange = (crossingId: string) => {
@@ -114,11 +133,19 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
         setMotherHutchId(null);
         return;
     }
-
     const crossing = crossings.find(c => c.id === crossingId);
     if (crossing) {
-       // Look up mother to find breed (inherited)
-       const mother = does.find(d => d.tag === crossing.doeId);
+        triggerLitterSelection(crossing, crossings, does);
+    }
+  };
+
+  // Logic extracted to handle both manual select and auto-select on mount
+  const triggerLitterSelection = (crossing: Crossing, allCrossings: Crossing[], allDoes: Rabbit[]) => {
+       setSelectedLitterId(crossing.id!);
+       
+       // Look up mother to find breed (inherited) - Try using passed does or fallback to state
+       const doeList = allDoes.length > 0 ? allDoes : does; 
+       const mother = doeList.find(d => d.tag === crossing.doeId);
        
        setFormData(prev => ({
          ...prev,
@@ -143,7 +170,6 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
        } else {
            setMotherHutchId(null);
        }
-    }
   };
 
   const generateTag = async () => {
@@ -223,7 +249,43 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
     setStep('review_kits');
   };
 
+  const handleConflictResolution = async (resolution: 'replace' | 'append') => {
+      setLoading(true);
+      try {
+          // If replacing, delete old ones first
+          if (resolution === 'replace' && selectedLitterId) {
+              await FarmService.deleteRabbitsByLitterId(selectedLitterId);
+              showToast("Previous records deleted", 'info');
+          }
+          // Proceed to save new ones
+          await performSave();
+      } catch (error) {
+          console.error("Conflict resolution failed", error);
+          showToast("Failed to process records", 'error');
+      } finally {
+          setLoading(false);
+      }
+  };
+
   const handleSave = async () => {
+    // 1. Check for existing records if coming from a litter
+    if (activeTab === 'Born' && selectedLitterId && !initialData) {
+        setLoading(true);
+        const existing = await FarmService.getRabbitsByLitterId(selectedLitterId);
+        setLoading(false);
+        
+        if (existing.length > 0) {
+            setExistingKitsCount(existing.length);
+            setStep('conflict_resolution');
+            return;
+        }
+    }
+
+    // 2. If no conflict, proceed
+    await performSave();
+  };
+
+  const performSave = async () => {
     setLoading(true);
 
     try {
@@ -244,15 +306,17 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
             dateOfAcquisition: isPurchase ? formData.dateOfAcquisition : formData.dateOfBirth,
         };
 
+        const litterIdToUse = activeTab === 'Born' ? selectedLitterId : undefined;
+
         if (initialData?.id) {
             // Update Single
             await FarmService.updateRabbit(initialData.id, basePayload);
         } else if (kits.length > 0) {
             // Bulk Save from Review
-            await FarmService.addBulkRabbits(basePayload as any, kits, isPurchase);
+            await FarmService.addBulkRabbits(basePayload as any, kits, isPurchase, litterIdToUse);
         } else {
             // Single Add
-            await FarmService.addRabbit(basePayload as any, isPurchase, kitCount);
+            await FarmService.addRabbit(basePayload as any, isPurchase, kitCount, litterIdToUse);
         }
 
         showToast("Saved successfully", 'success');
@@ -306,7 +370,9 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b border-gray-100 shrink-0">
           <h3 className="text-lg font-bold text-gray-900">
-            {step === 'review_kits' ? 'Review New Kits' : (initialData ? 'Edit Rabbit' : 'Add Rabbit')}
+            {step === 'review_kits' ? 'Review New Kits' : 
+             step === 'conflict_resolution' ? 'Existing Records Found' :
+             (initialData ? 'Edit Rabbit' : 'Add Rabbit')}
           </h3>
           <button onClick={onClose} className="p-1 text-gray-400 hover:bg-gray-100 rounded">
             <X size={20} />
@@ -316,7 +382,7 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
         {/* Scrollable Content */}
         <div className="overflow-y-auto p-6 space-y-6">
           
-          {step === 'details' ? (
+          {step === 'details' && (
             <>
                 {/* Source Toggle */}
                 {!initialData && (
@@ -372,7 +438,7 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
                         </div>
                         {kitCount > 1 && formData.tag && (
                              <p className="text-xs text-gray-500 mt-1">
-                                Will generate: <b>{formData.tag}-1</b> ... <b>{formData.tag}-{kitCount}</b>
+                                Will generate: <b>{formData.tag}-{activeTab === 'Purchased' ? '1' : '1'}</b> ...
                              </p>
                         )}
                     </div>
@@ -415,15 +481,20 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
                         <select 
                             value={selectedLitterId}
                             onChange={e => handleLitterChange(e.target.value)}
-                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-farm-500 outline-none"
+                            disabled={!!initialLitterId} // Disable if pre-selected via props
+                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-farm-500 outline-none disabled:bg-gray-100"
                         >
-                            <option value="">-- Select Mating Record --</option>
+                            <option value="">-- Select Valid Mating Record --</option>
                             {crossings.map(c => (
                             <option key={c.id} value={c.id}>
-                                {c.doeId} x {c.sireId} ({c.status === 'Delivered' ? 'Delivered' : 'Pregnant'})
+                                {c.doeId} x {c.sireId} (Delivered: {c.actualDeliveryDate || 'Unknown'}) - {c.kitsLive} Live Kits
+                                {c.isRecordsCreated ? ' (Created)' : ''}
                             </option>
                             ))}
                         </select>
+                        {crossings.length === 0 && !initialLitterId && (
+                            <p className="text-xs text-orange-500">No delivered litters available for record creation.</p>
+                        )}
 
                         <div className="grid grid-cols-2 gap-4">
                             <div>
@@ -613,7 +684,9 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
                     </div>
                 </form>
             </>
-          ) : (
+          )}
+
+          {step === 'review_kits' && (
             // REVIEW STEP
             <div className="space-y-4">
                 <div className="p-3 bg-blue-50 text-blue-800 text-sm rounded-lg flex gap-2">
@@ -680,6 +753,53 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
                 </div>
             </div>
           )}
+
+          {step === 'conflict_resolution' && (
+              <div className="space-y-6">
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                      <AlertCircle size={48} className="text-orange-500 mb-4" />
+                      <h3 className="text-xl font-bold text-gray-900 mb-2">Previous Records Found</h3>
+                      <p className="text-gray-500 max-w-sm">
+                          We found <strong>{existingKitsCount} existing rabbits</strong> linked to this mating record. 
+                          How would you like to proceed?
+                      </p>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 gap-4">
+                      <button 
+                         onClick={() => handleConflictResolution('replace')}
+                         className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl hover:bg-red-100 transition-colors text-left group"
+                      >
+                         <div className="p-2 bg-white rounded-full text-red-600 group-hover:bg-red-200 transition-colors">
+                             <Trash2 size={24} />
+                         </div>
+                         <div>
+                             <p className="font-bold text-red-900">Replace Existing Records</p>
+                             <p className="text-xs text-red-700 mt-1">
+                                Delete the {existingKitsCount} old rabbits and create these new ones.
+                                <br/>(Recommended if you made a mistake earlier)
+                             </p>
+                         </div>
+                      </button>
+
+                      <button 
+                         onClick={() => handleConflictResolution('append')}
+                         className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 transition-colors text-left group"
+                      >
+                         <div className="p-2 bg-white rounded-full text-blue-600 group-hover:bg-blue-200 transition-colors">
+                             <PlusCircle size={24} />
+                         </div>
+                         <div>
+                             <p className="font-bold text-blue-900">Keep Old & Add New</p>
+                             <p className="text-xs text-blue-700 mt-1">
+                                Keep the {existingKitsCount} existing rabbits and add these {kitCount} new ones.
+                                <br/>(Use if you are logging the rest of the litter later)
+                             </p>
+                         </div>
+                      </button>
+                  </div>
+              </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -691,6 +811,14 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
                 className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50"
              >
                 Back
+             </button>
+          ) : step === 'conflict_resolution' ? (
+             <button 
+                type="button" 
+                onClick={() => setStep('details')} // Or review_kits if that's where we came from? Usually better to go back to safe state.
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50"
+             >
+                Cancel
              </button>
           ) : (
              <button 
@@ -710,7 +838,7 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
              >
                 Review Kits <ArrowRight size={18} />
              </button>
-          ) : (
+          ) : step !== 'conflict_resolution' && (
              <button 
                 type="button"
                 onClick={step === 'review_kits' ? handleSave : (e) => {

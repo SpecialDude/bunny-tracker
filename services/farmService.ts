@@ -397,16 +397,71 @@ export const FarmService = {
     }
   },
 
+  async getRabbitsByLitterId(litterId: string): Promise<Rabbit[]> {
+    if (isDemoMode()) return MOCK_STORE.rabbits.filter((r: Rabbit) => r.litterId === litterId);
+    try {
+      const farmId = getFarmId();
+      const snapshot = await db.collection(`farms/${farmId}/rabbits`)
+        .where('litterId', '==', litterId)
+        .get();
+      return snapshot.docs.map(doc => convertDoc(doc) as Rabbit);
+    } catch (error) {
+      console.error("Error fetching rabbits by litter:", error);
+      return [];
+    }
+  },
+
+  async deleteRabbitsByLitterId(litterId: string): Promise<void> {
+    if (isDemoMode()) {
+        MOCK_STORE.rabbits = MOCK_STORE.rabbits.filter((r: Rabbit) => r.litterId !== litterId);
+        return;
+    }
+    const farmId = getFarmId();
+    const batch = db.batch();
+    
+    // Find all rabbits from this litter
+    const snapshot = await db.collection(`farms/${farmId}/rabbits`)
+      .where('litterId', '==', litterId)
+      .get();
+    
+    if (snapshot.empty) return;
+
+    for (const doc of snapshot.docs) {
+       const rabbitData = doc.data() as Rabbit;
+       
+       // 1. Decrease hutch occupancy if assigned
+       if (rabbitData.currentHutchId) {
+          const hutchSnap = await db.collection(`farms/${farmId}/hutches`)
+             .where('hutchId', '==', rabbitData.currentHutchId).get();
+          if (!hutchSnap.empty) {
+             const hutchDoc = hutchSnap.docs[0];
+             const currentOcc = hutchDoc.data().currentOccupancy || 0;
+             batch.update(hutchDoc.ref, { currentOccupancy: Math.max(0, currentOcc - 1) });
+          }
+       }
+       
+       // 2. Delete the rabbit document
+       batch.delete(doc.ref);
+    }
+    
+    await batch.commit();
+  },
+
   async addRabbit(
     rabbitData: Omit<Rabbit, 'id' | 'farmId' | 'rabbitId'>, 
     isPurchase: boolean,
-    kitCount: number = 1
+    kitCount: number = 1,
+    litterId?: string // Optional: If coming from a breeding record
   ): Promise<void> {
     const userId = getUserId();
     const farmId = getFarmId();
     const timestamp = new Date();
 
     if (isDemoMode()) {
+        if (litterId) {
+             const c = MOCK_STORE.crossings.find((x:any) => x.id === litterId);
+             if (c) c.isRecordsCreated = true;
+        }
         for (let i = 0; i < kitCount; i++) {
             const id = 'mock-rabbit-' + Math.random();
             MOCK_STORE.rabbits.push({
@@ -414,6 +469,7 @@ export const FarmService = {
                 id,
                 rabbitId: id,
                 farmId,
+                litterId,
                 tag: kitCount > 1 ? `${rabbitData.tag}-${i+1}` : rabbitData.tag,
                 createdAt: timestamp
             });
@@ -422,6 +478,12 @@ export const FarmService = {
     }
 
     const batch = db.batch();
+
+    // Mark breeding record as processed if provided
+    if (litterId) {
+        const crossingRef = db.collection(`farms/${farmId}/crossings`).doc(litterId);
+        batch.update(crossingRef, { isRecordsCreated: true });
+    }
 
     for (let i = 0; i < kitCount; i++) {
       const newRabbitRef = db.collection(`farms/${farmId}/rabbits`).doc();
@@ -436,6 +498,7 @@ export const FarmService = {
         rabbitId: newRabbitRef.id,
         farmId: farmId,
         ownerUid: userId,
+        litterId: litterId || null,
         createdAt: timestamp,
         updatedAt: timestamp,
         dateOfBirth: rabbitData.dateOfBirth ? new Date(rabbitData.dateOfBirth) : null,
@@ -509,21 +572,40 @@ export const FarmService = {
   async addBulkRabbits(
     baseData: Omit<Rabbit, 'id' | 'farmId' | 'rabbitId'>, 
     kits: { tag: string, sex: Sex, name: string, hutchId: string, breed?: string }[],
-    isPurchase: boolean
+    isPurchase: boolean,
+    litterId?: string // Optional: If coming from a breeding record
   ): Promise<void> {
       const userId = getUserId();
       const farmId = getFarmId();
       const timestamp = new Date();
   
       if (isDemoMode()) {
+          if (litterId) {
+             const c = MOCK_STORE.crossings.find((x:any) => x.id === litterId);
+             if (c) c.isRecordsCreated = true;
+          }
           kits.forEach(k => {
               const id = 'mock-rabbit-'+Math.random();
-              MOCK_STORE.rabbits.push({ ...baseData, ...k, id, rabbitId: id, farmId, createdAt: timestamp });
+              MOCK_STORE.rabbits.push({ 
+                  ...baseData, 
+                  ...k, 
+                  id, 
+                  rabbitId: id, 
+                  farmId, 
+                  litterId,
+                  createdAt: timestamp 
+              });
           });
           return;
       }
   
       const batch = db.batch();
+
+      // Mark breeding record as processed if provided
+      if (litterId) {
+        const crossingRef = db.collection(`farms/${farmId}/crossings`).doc(litterId);
+        batch.update(crossingRef, { isRecordsCreated: true });
+      }
   
       for (const kit of kits) {
           const newRabbitRef = db.collection(`farms/${farmId}/rabbits`).doc();
@@ -538,6 +620,7 @@ export const FarmService = {
               rabbitId: newRabbitRef.id,
               farmId: farmId,
               ownerUid: userId,
+              litterId: litterId || null,
               createdAt: timestamp,
               updatedAt: timestamp,
               dateOfBirth: baseData.dateOfBirth ? new Date(baseData.dateOfBirth) : null,

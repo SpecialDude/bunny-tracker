@@ -106,6 +106,7 @@ export interface Rabbit {
     sireId?: string; // Tag 
     doeId?: string;  // Tag 
   };
+  litterId?: string; // ID of the Crossing/Breeding record if born on farm
   notes: string;
   farmId: string;
 }
@@ -136,6 +137,7 @@ export interface Crossing {
   status: CrossingStatus;
   kitsBorn?: number; // Cached stats
   kitsLive?: number; // Cached stats
+  isRecordsCreated?: boolean; // Flag to prevent duplicate record creation
   notes?: string;
   farmId: string;
 }
