@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { X, ArrowRightLeft, Warehouse, AlertTriangle } from 'lucide-react';
+import { X, ArrowRightLeft, AlertTriangle } from 'lucide-react';
 import { FarmService } from '../services/farmService';
 import { Rabbit, Hutch } from '../types';
 import { useAlert } from '../contexts/AlertContext';

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { X, DollarSign, Save } from 'lucide-react';
+import { X, DollarSign } from 'lucide-react';
 import { FarmService } from '../services/farmService';
 import { TransactionType } from '../types';
 import { useAlert } from '../contexts/AlertContext';

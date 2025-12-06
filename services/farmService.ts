@@ -42,13 +42,13 @@ let MOCK_STORE: any = {
 // Check if we are in Demo Mode (auth.currentUser is null but we proceeded)
 // OR if using the explicit mock flag
 const isDemoMode = () => {
-  return !auth.currentUser; // Simple check: If no firebase user, assume demo
+  return !auth?.currentUser; // Simple check: If no firebase user, assume demo
 };
 
 // Helper to get current authenticated user ID
 const getUserId = () => {
   if (isDemoMode()) return 'demo-user-123';
-  if (!auth.currentUser) {
+  if (!auth?.currentUser) {
     throw new Error("User must be logged in to access farm data.");
   }
   return auth.currentUser.uid;
@@ -137,7 +137,7 @@ export const FarmService = {
     }
 
     // Strict check: if no auth, return null immediately
-    if (!auth.currentUser) return null;
+    if (!auth?.currentUser) return null;
 
     try {
       if (!db) return null;
@@ -584,7 +584,8 @@ export const FarmService = {
   async addBulkRabbits(
     baseData: Omit<Rabbit, 'id' | 'farmId' | 'rabbitId'>, 
     kits: { tag: string, sex: Sex, name: string, hutchId: string, breed?: string }[],
-    isPurchase: boolean,
+    // Removed unused isPurchase parameter
+    _isPurchase: boolean, 
     litterId?: string // Optional: If coming from a breeding record
   ): Promise<void> {
       const userId = getUserId();
@@ -1098,7 +1099,7 @@ export const FarmService = {
 
   async recordSale(data: Omit<Sale, 'id' | 'farmId' | 'saleId'> & { customer?: Omit<Customer, 'id' | 'farmId' | 'totalSpent'> }): Promise<void> {
     if (isDemoMode()) {
-        const saleId = 'S-'+Math.random();
+        const saleId = 'S-'+Math.random(); // Note: variable declared but not used in demo block is fine
         MOCK_STORE.transactions.push({ type: TransactionType.Income, category: 'Sale', amount: data.amount, date: data.date, notes: 'Mock Sale', farmId: 'demo' });
         // Mock update customer if exists
         if (data.customerId) {
@@ -1210,12 +1211,13 @@ export const FarmService = {
     
     if (rabbitId) {
       const snapshot = await query.get();
-      const records = snapshot.docs.map(doc => convertDoc(doc) as MedicalRecord);
-      return records.filter(r => r.rabbitId === rabbitId);
+      // Fix implicit any by using convertDoc which handles typing
+      const records = snapshot.docs.map((doc: any) => convertDoc(doc) as MedicalRecord);
+      return records.filter((r: MedicalRecord) => r.rabbitId === rabbitId);
     }
 
     const snapshot = await query.get();
-    return snapshot.docs.map(doc => convertDoc(doc) as MedicalRecord);
+    return snapshot.docs.map((doc: any) => convertDoc(doc) as MedicalRecord);
   },
 
   async addMedicalRecord(data: Omit<MedicalRecord, 'id' | 'farmId' | 'rabbitId'> & { rabbitId: string }): Promise<void> {
@@ -1320,6 +1322,7 @@ export const FarmService = {
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
     
+    // Helper to add notification if unique
     const addNotify = async (data: Omit<AppNotification, 'id' | 'farmId'>) => {
         if (!db) return;
         const q = await db.collection(`farms/${farmId}/notifications`).where('title', '==', data.title).where('date', '>=', todayStr).get();

@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
-  Users, TrendingUp, TrendingDown, 
+  Users, TrendingUp, 
   Baby, Activity, Loader2, Plus, Warehouse, Rabbit as RabbitIcon
 } from 'lucide-react';
 import { 
@@ -22,8 +23,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   // Data State
   const [rabbits, setRabbits] = useState<Rabbit[]>([]);
   const [hutches, setHutches] = useState<Hutch[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [crossings, setCrossings] = useState<Crossing[]>([]);
 
   // Derived State (Charts & KPIs)
   const [kpiData, setKpiData] = useState<any[]>([]);
@@ -49,8 +48,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
 
       setRabbits(rabbitsData);
       setHutches(hutchesData);
-      setTransactions(txnsData);
-      setCrossings(crossingsData);
 
       calculateKPIs(rabbitsData, hutchesData, txnsData);
       prepareCharts(rabbitsData, txnsData);
@@ -110,7 +107,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     // --- Financials (Last 6 Months) ---
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const today = new Date();
-    const last6Months = [];
+    const last6Months: any[] = [];
     
     for (let i = 5; i >= 0; i--) {
       const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
@@ -136,7 +133,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   };
 
   const prepareTasks = (cList: Crossing[]) => {
-    const tasks = [];
+    const tasks: any[] = [];
     const today = new Date();
     const threeDaysOut = new Date();
     threeDaysOut.setDate(today.getDate() + 3);
@@ -226,9 +223,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
           <h2 className="text-2xl font-bold text-gray-900">{farmName} Overview</h2>
           <p className="text-gray-500 text-sm">Real-time performance metrics.</p>
         </div>
-        <div className="flex gap-2">
-          {/* Action buttons could go here */}
-        </div>
       </div>
 
       {/* KPIs */}
@@ -304,7 +298,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                     paddingAngle={5}
                     dataKey="value"
                   >
-                    {breedChartData.map((entry, index) => (
+                    {breedChartData.map((_entry: any, index: number) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>

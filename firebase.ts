@@ -1,3 +1,4 @@
+
 import firebase from "firebase/compat/app";
 import "firebase/compat/auth";
 import "firebase/compat/firestore";
@@ -20,8 +21,6 @@ const firebaseConfig = {
 // ------------------------------------------------------------------
 // INITIALIZATION
 // ------------------------------------------------------------------
-
-console.log("[Firebase] Initializing with project:", firebaseConfig.projectId);
 
 let app;
 let authService;
@@ -46,9 +45,7 @@ try {
   functionsService = firebase.functions();
   googleProviderService = new firebase.auth.GoogleAuthProvider();
   
-  console.log("[Firebase] Initialization successful");
 } catch (error) {
-  console.error("[Firebase] Critical Initialization Error:", error);
   // We do NOT re-throw here. We let the services be undefined.
   // The UI (AuthContext) will check for this and show a friendly error.
 }

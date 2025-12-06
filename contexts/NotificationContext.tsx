@@ -1,8 +1,8 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { FarmService } from '../services/farmService';
 import { AppNotification } from '../types';
 import { useAuth } from './AuthContext';
-import { db } from '../firebase';
 
 interface NotificationContextType {
   notifications: AppNotification[];

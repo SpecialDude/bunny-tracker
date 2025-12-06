@@ -117,7 +117,7 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
                 setActiveTab('Born');
                 const preSelected = validCrossings.find(c => c.id === initialLitterId);
                 if (preSelected) {
-                    triggerLitterSelection(preSelected, validCrossings, doesData); 
+                    triggerLitterSelection(preSelected, doesData); 
                 } else {
                     setSelectedLitterId('');
                     setMotherHutchId(null);
@@ -151,12 +151,12 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
     }
     const crossing = crossings.find(c => c.id === crossingId);
     if (crossing) {
-        triggerLitterSelection(crossing, crossings, does);
+        triggerLitterSelection(crossing, does);
     }
   };
 
   // Logic extracted to handle both manual select and auto-select on mount
-  const triggerLitterSelection = (crossing: Crossing, allCrossings: Crossing[], allDoes: Rabbit[]) => {
+  const triggerLitterSelection = (crossing: Crossing, allDoes: Rabbit[]) => {
        setSelectedLitterId(crossing.id!);
        
        // Look up mother to find breed (inherited)
@@ -856,7 +856,7 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
           ) : step !== 'conflict_resolution' && (
              <button 
                 type="button"
-                onClick={step === 'review_kits' ? handleSave : (e) => {
+                onClick={step === 'review_kits' ? handleSave : () => {
                      // Trigger form submit programmatically for single adds
                      const form = document.getElementById('rabbitForm') as HTMLFormElement;
                      form?.requestSubmit(); 

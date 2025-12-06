@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Activity, Calendar, CheckCircle2, XCircle, Baby, Loader2, Edit, ListPlus, Check, RotateCw } from 'lucide-react';
+import { Plus, Activity, Calendar, CheckCircle2, XCircle, Baby, Loader2, Edit, ListPlus, RotateCw } from 'lucide-react';
 import { Crossing, CrossingStatus } from '../types';
 import { FarmService } from '../services/farmService';
 import { CrossingFormModal } from './CrossingFormModal';

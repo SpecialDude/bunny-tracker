@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
     ArrowLeft, Calendar, Activity, Syringe, Baby, Clock, 
-    MapPin, Ruler, Dna, FileText, Loader2, Warehouse, Scale, TrendingUp 
+    MapPin, Dna, Loader2, Warehouse, Scale, TrendingUp 
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { FarmService } from '../services/farmService';
