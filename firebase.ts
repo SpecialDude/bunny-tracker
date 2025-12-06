@@ -21,23 +21,43 @@ const firebaseConfig = {
 // INITIALIZATION
 // ------------------------------------------------------------------
 
-// Debug logging
 console.log("[Firebase] Initializing with project:", firebaseConfig.projectId);
 
 let app;
+let authService;
+let dbService;
+let storageService;
+let functionsService;
+let googleProviderService;
+
 try {
+  // Only attempt to initialize if we have a config, otherwise catch error below
+  if (!firebaseConfig.apiKey) {
+    throw new Error("Missing Firebase API Key");
+  }
+
   // Singleton initialization using Compat API
   app = !firebase.apps.length ? firebase.initializeApp(firebaseConfig) : firebase.app();
+  
+  // Initialize services only if app init succeeded
+  authService = firebase.auth();
+  dbService = firebase.firestore();
+  storageService = firebase.storage();
+  functionsService = firebase.functions();
+  googleProviderService = new firebase.auth.GoogleAuthProvider();
+  
   console.log("[Firebase] Initialization successful");
 } catch (error) {
   console.error("[Firebase] Critical Initialization Error:", error);
+  // We do NOT re-throw here. We let the services be undefined.
+  // The UI (AuthContext) will check for this and show a friendly error.
 }
 
-// Export services
-export const auth = firebase.auth();
-export const db = firebase.firestore();
-export const storage = firebase.storage();
-export const functions = firebase.functions();
-export const googleProvider = new firebase.auth.GoogleAuthProvider();
+// Export services (may be undefined if init failed)
+export const auth = authService;
+export const db = dbService;
+export const storage = storageService;
+export const functions = functionsService;
+export const googleProvider = googleProviderService;
 
 export default app;

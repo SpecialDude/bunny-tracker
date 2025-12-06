@@ -25,6 +25,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Safety check: If auth failed to initialize (e.g. bad config), stop loading
+    if (!auth) {
+      console.warn("Auth service not initialized. Stopping auth listener.");
+      setLoading(false);
+      return;
+    }
+
     // Real Firebase Auth Listener
     const unsubscribe = auth.onAuthStateChanged((currentUser) => {
       setUser(currentUser);
@@ -34,6 +41,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signInWithGoogle = async () => {
+    if (!auth || !googleProvider) throw new Error("Firebase Auth not initialized. Check API keys.");
     try {
       const result = await auth.signInWithPopup(googleProvider);
       if (result.user) {
@@ -47,6 +55,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signInWithEmail = async (email: string, password: string) => {
+    if (!auth) throw new Error("Firebase Auth not initialized. Check API keys.");
     try {
       const result = await auth.signInWithEmailAndPassword(email, password);
       if (result.user) {
@@ -59,6 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signUpWithEmail = async (email: string, password: string, name: string) => {
+    if (!auth) throw new Error("Firebase Auth not initialized. Check API keys.");
     try {
       const result = await auth.createUserWithEmailAndPassword(email, password);
       if (result.user) {
@@ -96,6 +106,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
+    if (!auth) {
+      setUser(null);
+      return;
+    }
     try {
       await auth.signOut();
       setUser(null);
