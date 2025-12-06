@@ -1099,7 +1099,6 @@ export const FarmService = {
 
   async recordSale(data: Omit<Sale, 'id' | 'farmId' | 'saleId'> & { customer?: Omit<Customer, 'id' | 'farmId' | 'totalSpent'> }): Promise<void> {
     if (isDemoMode()) {
-        const saleId = 'S-'+Math.random(); // Note: variable declared but not used in demo block is fine
         MOCK_STORE.transactions.push({ type: TransactionType.Income, category: 'Sale', amount: data.amount, date: data.date, notes: 'Mock Sale', farmId: 'demo' });
         // Mock update customer if exists
         if (data.customerId) {
