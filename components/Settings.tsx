@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { Save, User, Settings as SettingsIcon, Database, Download, AlertTriangle, Loader2, List, Trash2, Plus, DollarSign } from 'lucide-react';
+import { Save, User, Settings as SettingsIcon, Database, Download, AlertTriangle, Loader2, List, Trash2, Plus, DollarSign, Lock, ShieldCheck } from 'lucide-react';
 import { FarmService } from '../services/farmService';
 import { Farm } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,13 +7,13 @@ import { useAlert } from '../contexts/AlertContext';
 import { useFarm } from '../contexts/FarmContext';
 
 export const Settings: React.FC = () => {
-  const { user } = useAuth();
+  const { user, updateUserPassword } = useAuth();
   const { showToast, showConfirm } = useAlert();
   const { refreshFarm } = useFarm();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'biological' | 'breeds' | 'financials' | 'data'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'biological' | 'breeds' | 'financials' | 'security' | 'data'>('general');
   const [farmSettings, setFarmSettings] = useState<Farm | null>(null);
 
   // New Breed State
@@ -23,6 +22,9 @@ export const Settings: React.FC = () => {
 
   // New Category State
   const [newCategory, setNewCategory] = useState('');
+
+  // Password State
+  const [passwordForm, setPasswordForm] = useState({ new: '', confirm: '' });
 
   useEffect(() => {
     loadSettings();
@@ -149,6 +151,33 @@ export const Settings: React.FC = () => {
     }
   };
 
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passwordForm.new.length < 6) {
+      showToast("Password must be at least 6 characters", 'error');
+      return;
+    }
+    if (passwordForm.new !== passwordForm.confirm) {
+      showToast("Passwords do not match", 'error');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await updateUserPassword(passwordForm.new);
+      showToast("Password updated successfully", 'success');
+      setPasswordForm({ new: '', confirm: '' });
+    } catch (error: any) {
+      if (error.code === 'auth/requires-recent-login') {
+        showToast("Security Check: Please sign out and sign back in to change your password.", 'error');
+      } else {
+        showToast(error.message || "Failed to update password", 'error');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleExport = async () => {
     try {
       const data = await FarmService.exportFarmData();
@@ -220,7 +249,7 @@ export const Settings: React.FC = () => {
               activeTab === 'biological' ? 'bg-white border-t-2 border-t-farm-600 text-farm-800' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            <SettingsIcon size={18} /> Breeding Defaults
+            <SettingsIcon size={18} /> Defaults
           </button>
           <button
             onClick={() => setActiveTab('breeds')}
@@ -237,6 +266,14 @@ export const Settings: React.FC = () => {
             }`}
           >
             <DollarSign size={18} /> Financials
+          </button>
+          <button
+            onClick={() => setActiveTab('security')}
+            className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition-colors whitespace-nowrap ${
+              activeTab === 'security' ? 'bg-white border-t-2 border-t-farm-600 text-farm-800' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Lock size={18} /> Security
           </button>
           <button
             onClick={() => setActiveTab('data')}
@@ -512,6 +549,62 @@ export const Settings: React.FC = () => {
                             </table>
                         </div>
                     </div>
+                </div>
+             </div>
+          )}
+
+          {activeTab === 'security' && (
+             <div className="space-y-6">
+                <div className="p-4 bg-purple-50 border border-purple-100 rounded-lg flex items-start gap-3">
+                  <ShieldCheck className="text-purple-600 shrink-0 mt-0.5" size={20} />
+                  <div>
+                    <h4 className="font-bold text-purple-900 text-sm">Account Security</h4>
+                    <p className="text-sm text-purple-800 mt-1">
+                      You can set or update your password here. If you originally signed up with Google, setting a password will allow you to log in with both Google and your email address.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="max-w-md">
+                   <form onSubmit={handlePasswordUpdate} className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm space-y-4">
+                      <h4 className="font-bold text-gray-800 mb-4">Set / Update Password</h4>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                        <input
+                          type="password"
+                          required
+                          minLength={6}
+                          value={passwordForm.new}
+                          onChange={(e) => setPasswordForm({ ...passwordForm, new: e.target.value })}
+                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
+                          placeholder="Min 6 characters"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+                        <input
+                          type="password"
+                          required
+                          minLength={6}
+                          value={passwordForm.confirm}
+                          onChange={(e) => setPasswordForm({ ...passwordForm, confirm: e.target.value })}
+                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
+                          placeholder="Re-enter password"
+                        />
+                      </div>
+
+                      <div className="pt-2">
+                        <button
+                          type="submit"
+                          disabled={saving || !passwordForm.new}
+                          className="w-full py-2 bg-gray-900 text-white rounded-lg font-medium hover:bg-black transition-colors disabled:opacity-50"
+                        >
+                          {saving ? 'Updating...' : 'Update Password'}
+                        </button>
+                      </div>
+                   </form>
                 </div>
              </div>
           )}

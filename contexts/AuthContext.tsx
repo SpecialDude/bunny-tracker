@@ -12,6 +12,7 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string, name: string) => Promise<void>;
+  updateUserPassword: (password: string) => Promise<void>;
   enterDemoMode: () => void;
   logout: () => Promise<void>;
 }
@@ -89,6 +90,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateUserPassword = async (password: string) => {
+    if (!auth || !user) throw new Error("User not authenticated");
+    try {
+      await user.updatePassword(password);
+    } catch (error) {
+      console.error("Error updating password:", error);
+      throw error;
+    }
+  };
+
   const enterDemoMode = () => {
       // Mock User for Demo
       setUser(null); // Ensure no real auth
@@ -125,6 +136,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       signInWithGoogle, 
       signInWithEmail,
       signUpWithEmail,
+      updateUserPassword,
       enterDemoMode, 
       logout 
     }}>
