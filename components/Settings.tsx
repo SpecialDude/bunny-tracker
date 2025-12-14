@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Save, User, Settings as SettingsIcon, Database, Download, AlertTriangle, Loader2, List, Trash2, Plus, DollarSign, Lock, ShieldCheck } from 'lucide-react';
+import { Save, User, Settings as SettingsIcon, Database, Download, AlertTriangle, Loader2, List, Trash2, Plus, DollarSign, Lock, ShieldCheck, FileSpreadsheet, CheckSquare, Square } from 'lucide-react';
 import { FarmService } from '../services/farmService';
 import { Farm } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
 import { useFarm } from '../contexts/FarmContext';
+import JSZip from 'jszip';
 
 export const Settings: React.FC = () => {
   const { user, updateUserPassword } = useAuth();
@@ -25,6 +26,17 @@ export const Settings: React.FC = () => {
 
   // Password State
   const [passwordForm, setPasswordForm] = useState({ new: '', confirm: '' });
+
+  // Export State
+  const [exportTables, setExportTables] = useState({
+    rabbits: true,
+    hutches: true,
+    breeding: true,
+    finances: true,
+    medical: true,
+    customers: true
+  });
+  const [isExportingCsv, setIsExportingCsv] = useState(false);
 
   useEffect(() => {
     loadSettings();
@@ -178,7 +190,7 @@ export const Settings: React.FC = () => {
     }
   };
 
-  const handleExport = async () => {
+  const handleExportJSON = async () => {
     try {
       const data = await FarmService.exportFarmData();
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -194,6 +206,193 @@ export const Settings: React.FC = () => {
     } catch (error) {
       showToast("Failed to export data", 'error');
     }
+  };
+
+  // --- CSV / Excel Export Logic ---
+  
+  const convertToCSV = (objArray: any[]) => {
+    if (!objArray || objArray.length === 0) return '';
+    const header = Object.keys(objArray[0]).join(',');
+    let str = header + '\r\n';
+
+    for (let i = 0; i < objArray.length; i++) {
+        let line = '';
+        for (const index in objArray[i]) {
+            if (line !== '') line += ',';
+            let item = objArray[i][index];
+            if (item === null || item === undefined) {
+                 item = '';
+            } else if (typeof item === 'string') {
+                item = item.replace(/"/g, '""'); // Escape double quotes
+                if (item.includes(',') || item.includes('\n') || item.includes('"')) {
+                    item = `"${item}"`; // Wrap in quotes if contains comma/newline
+                }
+            } else if (typeof item === 'object') {
+                // Try to stringify simple objects, ignore complex ones or just mark
+                item = JSON.stringify(item).replace(/"/g, '""');
+                 if (item.includes(',')) item = `"${item}"`;
+            }
+            line += item;
+        }
+        str += line + '\r\n';
+    }
+    return str;
+  };
+
+  const handleExportCSV = async () => {
+      const selectedKeys = Object.keys(exportTables).filter(k => exportTables[k as keyof typeof exportTables]);
+      if (selectedKeys.length === 0) {
+          showToast("Please select at least one data type to export.", 'error');
+          return;
+      }
+
+      setIsExportingCsv(true);
+      try {
+          const zip = new JSZip();
+          const dateStr = new Date().toISOString().split('T')[0];
+
+          // 1. Fetch & Process Rabbits
+          if (exportTables.rabbits) {
+              const rabbits = await FarmService.getRabbits();
+              const flatRabbits = rabbits.map(r => ({
+                  ID: r.tag,
+                  Name: r.name || '',
+                  Breed: r.breed,
+                  Sex: r.sex,
+                  Status: r.status,
+                  DOB: r.dateOfBirth || '',
+                  Hutch: r.currentHutchId || '',
+                  Father: r.parentage?.sireId || '',
+                  Mother: r.parentage?.doeId || '',
+                  Weight_KG: r.weight || 0,
+                  Notes: r.notes || ''
+              }));
+              zip.file(`rabbits-${dateStr}.csv`, convertToCSV(flatRabbits));
+          }
+
+          // 2. Fetch & Process Hutches
+          if (exportTables.hutches) {
+              const hutches = await FarmService.getHutches();
+              const flatHutches = hutches.map(h => ({
+                  Label: h.label,
+                  ID: h.hutchId,
+                  Capacity: h.capacity,
+                  Occupancy: h.currentOccupancy,
+                  Accessories: h.accessories?.join('; ') || ''
+              }));
+              zip.file(`hutches-${dateStr}.csv`, convertToCSV(flatHutches));
+          }
+
+          // 3. Fetch & Process Finance
+          if (exportTables.finances) {
+              const txns = await FarmService.getTransactions();
+              const flatTxns = txns.map(t => ({
+                  Date: t.date,
+                  Type: t.type,
+                  Category: t.category,
+                  Amount: t.amount,
+                  Description: t.notes
+              }));
+              zip.file(`finances-${dateStr}.csv`, convertToCSV(flatTxns));
+          }
+
+          // 4. Fetch & Process Breeding
+          if (exportTables.breeding) {
+              const crossings = await FarmService.getCrossings();
+              const flatCross = crossings.map(c => ({
+                  Date: c.dateOfCrossing,
+                  Doe: c.doeId,
+                  Buck: c.sireId,
+                  Status: c.status,
+                  Expected_Deliver: c.expectedDeliveryDate,
+                  Actual_Delivery: c.actualDeliveryDate || '',
+                  Kits_Born: c.kitsBorn || 0,
+                  Kits_Live: c.kitsLive || 0
+              }));
+              zip.file(`breeding-${dateStr}.csv`, convertToCSV(flatCross));
+          }
+
+          // 5. Medical
+          if (exportTables.medical) {
+              const medical = await FarmService.getMedicalRecords();
+              const flatMed = medical.map(m => ({
+                  Date: m.date,
+                  Rabbit: m.rabbitId,
+                  Type: m.type,
+                  Medication: m.medicationName,
+                  Dosage: m.dosage || '',
+                  Cost: m.cost || 0,
+                  Notes: m.notes || ''
+              }));
+              zip.file(`medical-${dateStr}.csv`, convertToCSV(flatMed));
+          }
+
+          // 6. Customers
+          if (exportTables.customers) {
+              const customers = await FarmService.getCustomers();
+              const flatCust = customers.map(c => ({
+                  Name: c.name,
+                  Phone: c.phone || '',
+                  Email: c.email || '',
+                  Total_Spent: c.totalSpent,
+                  Last_Purchase: c.lastPurchaseDate || ''
+              }));
+              zip.file(`customers-${dateStr}.csv`, convertToCSV(flatCust));
+          }
+
+          // Generate Download
+          if (selectedKeys.length === 1) {
+              // If only one file, we might prefer just downloading that CSV directly? 
+              // But JSZip keeps it consistent. Let's zip if user requested "package".
+              // Actually, user said "selected all or multiple which should package them in a zip".
+              // If single, user might prefer direct CSV. Let's do direct CSV for single.
+              const firstKey = selectedKeys[0];
+              const fileObj = Object.values(zip.files)[0] as any;
+              if (fileObj) {
+                  const content = await fileObj.async('blob');
+                  const url = window.URL.createObjectURL(content);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = fileObj.name;
+                  document.body.appendChild(a);
+                  a.click();
+                  window.URL.revokeObjectURL(url);
+                  document.body.removeChild(a);
+              }
+          } else {
+              // Multiple -> Zip
+              const content = await zip.generateAsync({ type: 'blob' });
+              const url = window.URL.createObjectURL(content);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `bunnytrack-export-${dateStr}.zip`;
+              document.body.appendChild(a);
+              a.click();
+              window.URL.revokeObjectURL(url);
+              document.body.removeChild(a);
+          }
+          
+          showToast("Export generated successfully", 'success');
+
+      } catch (error) {
+          console.error(error);
+          showToast("Failed to generate CSV/Zip", 'error');
+      } finally {
+          setIsExportingCsv(false);
+      }
+  };
+
+  const toggleAllExport = () => {
+      const allSelected = Object.values(exportTables).every(Boolean);
+      const newState = !allSelected;
+      setExportTables({
+          rabbits: newState,
+          hutches: newState,
+          breeding: newState,
+          finances: newState,
+          medical: newState,
+          customers: newState
+      });
   };
 
   const handleResetAccount = async () => {
@@ -611,25 +810,73 @@ export const Settings: React.FC = () => {
 
           {activeTab === 'data' && (
             <div className="space-y-6">
+              
+              {/* CSV / Excel Export Section */}
+              <div className="border border-green-200 rounded-lg p-4 bg-white">
+                <div className="mb-4">
+                    <h4 className="text-base font-bold text-green-800 flex items-center gap-2">
+                      <FileSpreadsheet size={18} /> Export as CSV / Excel
+                    </h4>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Select the data you want to export. If multiple are selected, they will be packaged in a ZIP file.
+                    </p>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+                    {Object.entries(exportTables).map(([key, checked]) => (
+                        <label key={key} className="flex items-center gap-2 cursor-pointer p-2 border border-gray-100 rounded hover:bg-gray-50">
+                            <input 
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => setExportTables(prev => ({ ...prev, [key]: !prev[key as keyof typeof exportTables] }))}
+                              className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                            />
+                            <span className="capitalize text-sm font-medium text-gray-700">{key}</span>
+                        </label>
+                    ))}
+                </div>
+
+                <div className="flex gap-3">
+                   <button 
+                      onClick={toggleAllExport}
+                      className="px-3 py-1.5 text-xs text-green-600 font-medium hover:bg-green-50 rounded border border-green-100 flex items-center gap-1"
+                   >
+                      {Object.values(exportTables).every(Boolean) ? <Square size={14}/> : <CheckSquare size={14}/>}
+                      {Object.values(exportTables).every(Boolean) ? 'Deselect All' : 'Select All'}
+                   </button>
+                   <div className="flex-1"></div>
+                   <button 
+                      onClick={handleExportCSV}
+                      disabled={isExportingCsv}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 flex items-center gap-2 disabled:opacity-70"
+                   >
+                      {isExportingCsv ? <Loader2 className="animate-spin" size={16} /> : <FileSpreadsheet size={16}/>}
+                      {isExportingCsv ? 'Preparing...' : 'Download CSV(s)'}
+                   </button>
+                </div>
+              </div>
+
+              {/* JSON Backup Section */}
               <div className="border border-gray-200 rounded-lg p-4">
                 <div className="flex items-start justify-between">
                   <div>
                     <h4 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                      <Download size={18} className="text-blue-600" /> Export Data
+                      <Download size={18} className="text-blue-600" /> Full System Backup (JSON)
                     </h4>
                     <p className="text-sm text-gray-500 mt-1">
-                      Download a full backup of your farm data (Rabbits, Hutches, Finance, etc.) as a JSON file.
+                      Download a complete backup of all farm data. Useful for restoring data later.
                     </p>
                   </div>
                   <button
-                    onClick={handleExport}
-                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 text-gray-700"
+                    onClick={handleExportJSON}
+                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 text-gray-700 flex items-center gap-2"
                   >
-                    Download Backup
+                    <Database size={16} /> Download JSON
                   </button>
                 </div>
               </div>
 
+              {/* Danger Zone */}
               <div className="border border-red-200 rounded-lg p-4 bg-red-50">
                 <div className="flex items-start justify-between">
                   <div>
