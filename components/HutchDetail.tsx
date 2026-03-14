@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Loader2, Rabbit as RabbitIcon, Edit2, Scale, Calendar, List, LayoutGrid, ArrowRightLeft } from 'lucide-react';
+import { ArrowLeft, Loader2, Rabbit as RabbitIcon, Scale, Calendar, List, LayoutGrid, ArrowRightLeft } from 'lucide-react';
 import { Hutch, Rabbit, Sex } from '../types';
 import { FarmService } from '../services/farmService';
 import { MoveRabbitModal } from './MoveRabbitModal';
