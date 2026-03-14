@@ -10,6 +10,7 @@ interface FarmContextType {
   currencySymbol: string;
   breeds: Breed[];
   transactionCategories: string[];
+  defaultWeaningDays: number;
   loading: boolean;
   refreshFarm: () => Promise<void>;
 }
@@ -24,6 +25,7 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currency, setCurrency] = useState('USD');
   const [breeds, setBreeds] = useState<Breed[]>([]);
   const [transactionCategories, setTransactionCategories] = useState<string[]>([]);
+  const [defaultWeaningDays, setDefaultWeaningDays] = useState(35);
   const [loading, setLoading] = useState(true);
 
   const getSymbol = (code: string) => {
@@ -44,6 +46,9 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setCurrency(settings.currency);
         setBreeds(settings.breeds || []);
         setTransactionCategories(settings.transactionCategories || []);
+        if (settings.defaultWeaningDays) {
+           setDefaultWeaningDays(settings.defaultWeaningDays);
+        }
       }
     } catch (error) {
       console.error("Error fetching farm context:", error);
@@ -63,6 +68,7 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
       currencySymbol: getSymbol(currency),
       breeds,
       transactionCategories,
+      defaultWeaningDays,
       loading, 
       refreshFarm 
     }}>

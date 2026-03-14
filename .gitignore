@@ -1,3 +1,15 @@
+# Environment variables
+.env
+.env.local
+
+# Build artifacts
+dist
+dev-dist
+dist-ssr
+
+# Dependencies
+node_modules
+
 # Logs
 logs
 *.log
@@ -7,10 +19,8 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# Test files
+puppeteer_test.cjs
 
 # Editor directories and files
 .vscode/*

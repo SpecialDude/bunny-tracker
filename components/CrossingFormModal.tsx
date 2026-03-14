@@ -41,6 +41,13 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
     }
   }, [isOpen]);
 
+  const hutchMap = useMemo(() => {
+    return hutches.reduce((acc, h) => {
+      acc[h.hutchId] = h.label;
+      return acc;
+    }, {} as Record<string, string>);
+  }, [hutches]);
+
   const selectedDoe = does.find(r => r.tag === formData.doeId);
   const selectedSire = bucks.find(r => r.tag === formData.sireId);
   
@@ -105,6 +112,8 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
         ...formData,
         doeName: selectedDoe?.name,
         sireName: selectedSire?.name,
+        doeHutchLabel: selectedDoe?.currentHutchId ? hutchMap[selectedDoe.currentHutchId] : undefined,
+        sireHutchLabel: selectedSire?.currentHutchId ? hutchMap[selectedSire.currentHutchId] : undefined,
         matingHutchId: targetId
       }, moveConfig);
 
@@ -149,7 +158,10 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
                 >
                 <option value="">Choose Doe...</option>
                 {does.map(d => (
-                    <option key={d.id} value={d.tag}>{d.tag} {d.name ? `(${d.name})` : ''}</option>
+                    <option key={d.id} value={d.tag}>
+                      {d.tag} {d.name ? `(${d.name})` : ''} 
+                      {d.currentHutchId ? ` - ${hutchMap[d.currentHutchId] || d.currentHutchId}` : ''}
+                    </option>
                 ))}
                 </select>
                 {selectedDoe?.currentHutchId && (
@@ -172,7 +184,10 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
                 >
                 <option value="">Choose Buck...</option>
                 {bucks.map(b => (
-                    <option key={b.id} value={b.tag}>{b.tag} {b.name ? `(${b.name})` : ''}</option>
+                    <option key={b.id} value={b.tag}>
+                      {b.tag} {b.name ? `(${b.name})` : ''}
+                      {b.currentHutchId ? ` - ${hutchMap[b.currentHutchId] || b.currentHutchId}` : ''}
+                    </option>
                 ))}
                 </select>
                 {selectedSire?.currentHutchId && (

@@ -625,6 +625,7 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Current Hutch</label>
                         <select 
+                        disabled={!!initialData}
                         value={formData.currentHutchId || ''}
                         onChange={e => {
                             setFormData({...formData, currentHutchId: e.target.value});
@@ -632,7 +633,7 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
                         }}
                         className={`w-full px-3 py-2 bg-white border rounded-lg text-sm focus:ring-2 outline-none ${
                             hutchIsFull ? 'border-red-300 focus:ring-red-200' : 'border-gray-300 focus:ring-farm-500'
-                        }`}
+                        } ${!!initialData ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
                         >
                         <option value="">-- Unassigned --</option>
                         {hutches.map(h => (
@@ -641,6 +642,12 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
                             </option>
                         ))}
                         </select>
+                        
+                        {!!initialData && (
+                            <p className="text-xs text-gray-500 mt-1 italic">
+                                To change the hutch, please close this and use the 'Move' action to maintain occupancy history.
+                            </p>
+                        )}
                         
                         {/* Info: Kits staying with mother */}
                         {!initialData && activeTab === 'Born' && formData.currentHutchId && formData.currentHutchId === motherHutchId && (

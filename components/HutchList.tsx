@@ -3,6 +3,7 @@ import { Search, Filter, Plus, Warehouse, Edit2, AlertCircle, Trash2 } from 'luc
 import { Hutch } from '../types';
 import { FarmService } from '../services/farmService';
 import { HutchFormModal } from './HutchFormModal';
+import { HutchDetail } from './HutchDetail';
 import { useAlert } from '../contexts/AlertContext';
 
 export const HutchList: React.FC = () => {
@@ -11,6 +12,9 @@ export const HutchList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<'All' | 'Available' | 'Full'>('All');
+  
+  const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
+  const [viewHutch, setViewHutch] = useState<Hutch | undefined>(undefined);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedHutch, setSelectedHutch] = useState<Hutch | undefined>(undefined);
@@ -37,12 +41,14 @@ export const HutchList: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleEdit = (hutch: Hutch) => {
+  const handleEdit = (hutch: Hutch, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     setSelectedHutch(hutch);
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (id: string, occupancy: number) => {
+  const handleDelete = async (id: string, occupancy: number, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     if (occupancy > 0) {
       showToast("Cannot delete a hutch that currently contains rabbits. Please move them first.", 'error');
       return;
@@ -81,6 +87,7 @@ export const HutchList: React.FC = () => {
 
   // Calculate Progress Color
   const getProgressColor = (current: number, max: number) => {
+    if (!max) return 'bg-green-500';
     const percentage = (current / max) * 100;
     if (percentage >= 100) return 'bg-red-500';
     if (percentage >= 75) return 'bg-amber-500';
@@ -89,6 +96,17 @@ export const HutchList: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {viewMode === 'detail' && viewHutch ? (
+          <HutchDetail 
+              hutch={viewHutch} 
+              onBack={() => {
+                  setViewMode('list');
+                  setViewHutch(undefined);
+                  fetchData(); // Refresh list to get updated occupancies
+              }} 
+          />
+      ) : (
+      <>
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Hutches</h2>
@@ -145,7 +163,14 @@ export const HutchList: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredHutches.map(hutch => (
-            <div key={hutch.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:shadow-md transition-shadow relative group">
+            <div 
+              key={hutch.id} 
+              onClick={() => {
+                  setViewHutch(hutch);
+                  setViewMode('detail');
+              }}
+              className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:shadow-md transition-shadow relative group cursor-pointer border-l-4 border-l-transparent hover:border-l-farm-500"
+            >
               
               {/* Top Row: ID and Edit */}
               <div className="flex justify-between items-start mb-2">
@@ -157,14 +182,14 @@ export const HutchList: React.FC = () => {
                 </div>
                 <div className="flex gap-1">
                   <button 
-                    onClick={() => handleEdit(hutch)}
-                    className="p-1.5 text-gray-400 hover:text-farm-600 hover:bg-farm-50 rounded-lg transition-colors"
+                    onClick={(e) => handleEdit(hutch, e)}
+                    className="p-1.5 text-gray-400 hover:text-farm-600 hover:bg-farm-50 rounded-lg transition-colors z-10"
                   >
                     <Edit2 size={16} />
                   </button>
                   <button 
-                    onClick={() => handleDelete(hutch.id!, hutch.currentOccupancy)}
-                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    onClick={(e) => handleDelete(hutch.id!, hutch.currentOccupancy, e)}
+                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors z-10"
                   >
                     <Trash2 size={16} />
                   </button>
@@ -182,7 +207,7 @@ export const HutchList: React.FC = () => {
                 <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
                   <div 
                     className={`h-full rounded-full ${getProgressColor(hutch.currentOccupancy, hutch.capacity)}`} 
-                    style={{ width: `${Math.min((hutch.currentOccupancy / hutch.capacity) * 100, 100)}%` }}
+                    style={{ width: `${hutch.capacity > 0 ? Math.min((hutch.currentOccupancy / hutch.capacity) * 100, 100) : 100}%` }}
                   />
                 </div>
               </div>
@@ -213,6 +238,8 @@ export const HutchList: React.FC = () => {
         onSuccess={fetchData}
         initialData={selectedHutch}
       />
+      </>
+      )}
     </div>
   );
 };

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Filter, Plus, MoreHorizontal, Loader2, Rabbit as RabbitIcon, Skull, Stethoscope, ArrowRightLeft, Eye, Scale } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Search, Filter, Plus, MoreHorizontal, Loader2, Rabbit as RabbitIcon, Skull, Stethoscope, ArrowRightLeft, Eye, Scale, ChevronUp, ChevronDown } from 'lucide-react';
 import { Rabbit, RabbitStatus } from '../types';
 import { FarmService } from '../services/farmService';
 import { RabbitFormModal } from './RabbitFormModal';
@@ -8,10 +8,14 @@ import { MedicalModal } from './MedicalModal';
 import { MoveRabbitModal } from './MoveRabbitModal';
 import { RabbitDetail } from './RabbitDetail';
 import { WeightModal } from './WeightModal';
+import { TablePagination } from './TablePagination';
 
 interface Props {
     // Optional prop if we want to handle view switching internally or via parent
 }
+
+type SortField = 'tag' | 'name' | 'dateOfBirth' | 'breed' | 'status' | 'currentHutchId';
+type SortDirection = 'asc' | 'desc';
 
 export const RabbitList: React.FC<Props> = () => {
   const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
@@ -22,9 +26,13 @@ export const RabbitList: React.FC<Props> = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('All');
   
+  // Sorting State
+  const [sortField, setSortField] = useState<SortField>('tag');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(25);
   
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -50,10 +58,10 @@ export const RabbitList: React.FC<Props> = () => {
     fetchData();
   }, [viewMode]); // Refresh when coming back from detail view
 
-  // Reset pagination when filters change
+  // Reset pagination when filters or sort change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterStatus]);
+  }, [searchTerm, filterStatus, sortField, sortDirection, itemsPerPage]);
 
   const handleAdd = () => {
     setSelectedRabbit(undefined);
@@ -90,6 +98,24 @@ export const RabbitList: React.FC<Props> = () => {
       setViewMode('detail');
   };
 
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const statusPriority: Record<string, number> = {
+    [RabbitStatus.Pregnant]: 1,
+    [RabbitStatus.Alive]: 2,
+    [RabbitStatus.Weaned]: 3,
+    [RabbitStatus.Sold]: 4,
+    [RabbitStatus.Dead]: 5,
+    [RabbitStatus.Slaughtered]: 6,
+  };
+
   const getStatusColor = (status: RabbitStatus) => {
     switch(status) {
       case RabbitStatus.Pregnant: return 'bg-pink-100 text-pink-800 border-pink-200';
@@ -112,27 +138,82 @@ export const RabbitList: React.FC<Props> = () => {
       return `${Math.floor(days / 30)} months`;
   };
 
-  // Filter Logic
-  const filteredRabbits = rabbits.filter(r => {
-    const matchesSearch = 
-      r.tag.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      (r.name && r.name.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    const matchesFilter = filterStatus === 'All' || r.status === filterStatus;
+  // Filter & Sort Logic
+  const processedRabbits = useMemo(() => {
+    let result = rabbits.filter(r => {
+      const matchesSearch = 
+        r.tag.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (r.name && r.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        r.breed.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesFilter = filterStatus === 'All' || r.status === filterStatus;
 
-    return matchesSearch && matchesFilter;
-  });
+      return matchesSearch && matchesFilter;
+    });
+
+    // Apply Sorting
+    result.sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortField) {
+        case 'tag':
+          comparison = a.tag.localeCompare(b.tag, undefined, { numeric: true });
+          break;
+        case 'name':
+          comparison = (a.name || '').localeCompare(b.name || '');
+          break;
+        case 'breed':
+          comparison = a.breed.localeCompare(b.breed);
+          break;
+        case 'status':
+          comparison = (statusPriority[a.status] || 99) - (statusPriority[b.status] || 99);
+          break;
+        case 'currentHutchId':
+          comparison = (a.currentHutchId || '').localeCompare(b.currentHutchId || '');
+          break;
+        case 'dateOfBirth':
+          // For age, we sort by DOB. Ascending DOB means older rabbits first.
+          // If we want "Age" column to sort by age, asc direction should show youngest first?
+          // Usually people expect "Age" ASC to be smallest number first.
+          // Smallest number means latest DOB.
+          comparison = new Date(a.dateOfBirth).getTime() - new Date(b.dateOfBirth).getTime();
+          break;
+      }
+
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+
+    return result;
+  }, [rabbits, searchTerm, filterStatus, sortField, sortDirection]);
 
   // Pagination Logic
-  const totalPages = Math.ceil(filteredRabbits.length / itemsPerPage);
+  const totalPages = Math.ceil(processedRabbits.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedRabbits = filteredRabbits.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedRabbits = processedRabbits.slice(startIndex, startIndex + itemsPerPage);
 
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages) {
       setCurrentPage(newPage);
     }
   };
+
+  const SortableHeader: React.FC<{ field: SortField; label: string }> = ({ field, label }) => (
+    <th 
+      className="px-6 py-4 font-semibold text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors group"
+      onClick={() => handleSort(field)}
+    >
+      <div className="flex items-center gap-1">
+        {label}
+        <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
+          <ChevronUp size={12} className={sortField === field && sortDirection === 'asc' ? 'text-farm-600 opacity-100' : 'text-gray-300'} />
+          <ChevronDown size={12} className={sortField === field && sortDirection === 'desc' ? 'text-farm-600 opacity-100' : 'text-gray-300'} />
+        </div>
+        {sortField === field && (
+          sortDirection === 'asc' ? <ChevronUp size={14} className="text-farm-600" /> : <ChevronDown size={14} className="text-farm-600" />
+        )}
+      </div>
+    </th>
+  );
 
   if (viewMode === 'detail' && detailId) {
       return <RabbitDetail rabbitId={detailId} onBack={() => setViewMode('list')} />;
@@ -190,22 +271,35 @@ export const RabbitList: React.FC<Props> = () => {
             <Loader2 className="animate-spin mb-2" size={32} />
             <p>Loading rabbits...</p>
           </div>
-        ) : filteredRabbits.length === 0 ? (
+        ) : processedRabbits.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-gray-400">
             <RabbitIcon size={48} className="mb-2 opacity-20" />
             <p>No rabbits found.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
+            <TablePagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={processedRabbits.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={handlePageChange}
+              onItemsPerPageChange={setItemsPerPage}
+              startIndex={startIndex}
+              endIndex={startIndex + itemsPerPage}
+              label="rabbits"
+              totalCount={rabbits.length}
+              className="bg-gray-50/50 border-b border-gray-100"
+            />
             <table className="w-full text-left text-sm text-gray-500">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
-                  <th className="px-6 py-4 font-semibold text-gray-900">Tag ID</th>
-                  <th className="px-6 py-4 font-semibold text-gray-900">Breed</th>
+                  <SortableHeader field="tag" label="Tag ID" />
+                  <SortableHeader field="breed" label="Breed" />
                   <th className="px-6 py-4 font-semibold text-gray-900">Sex</th>
-                  <th className="px-6 py-4 font-semibold text-gray-900">Status</th>
-                  <th className="px-6 py-4 font-semibold text-gray-900">Location</th>
-                  <th className="px-6 py-4 font-semibold text-gray-900">Age</th>
+                  <SortableHeader field="status" label="Status" />
+                  <SortableHeader field="currentHutchId" label="Location" />
+                  <SortableHeader field="dateOfBirth" label="Age" />
                   <th className="px-6 py-4 font-semibold text-gray-900 text-right">Actions</th>
                 </tr>
               </thead>
@@ -285,29 +379,20 @@ export const RabbitList: React.FC<Props> = () => {
           </div>
         )}
         
-        {filteredRabbits.length > 0 && (
-          <div className="px-6 py-4 border-t border-gray-100 flex justify-between items-center text-sm text-gray-500">
-            <span>
-                Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredRabbits.length)} of {filteredRabbits.length} rabbits
-                {filteredRabbits.length !== rabbits.length && ` (filtered from ${rabbits.length})`}
-            </span>
-            <div className="flex gap-2">
-              <button 
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                  Prev
-              </button>
-              <button 
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage === totalPages || totalPages === 0}
-                  className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                  Next
-              </button>
-            </div>
-          </div>
+        {processedRabbits.length > 0 && (
+          <TablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={processedRabbits.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={handlePageChange}
+            onItemsPerPageChange={setItemsPerPage}
+            startIndex={startIndex}
+            endIndex={startIndex + itemsPerPage}
+            label="rabbits"
+            totalCount={rabbits.length}
+            className="border-t border-gray-100"
+          />
         )}
       </div>
 

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Skull, Utensils } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Skull, Utensils, Warehouse } from 'lucide-react';
 import { Rabbit, RabbitStatus } from '../types';
 import { FarmService } from '../services/farmService';
 import { useAlert } from '../contexts/AlertContext';
@@ -19,6 +19,16 @@ export const MortalityModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, ra
   const [type, setType] = useState<RabbitStatus.Dead | RabbitStatus.Slaughtered>(RabbitStatus.Dead);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
+  const [hutchLabel, setHutchLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen && rabbit.currentHutchId) {
+      FarmService.getHutches().then(hutches => {
+        const hutch = hutches.find(h => h.hutchId === rabbit.currentHutchId);
+        if (hutch) setHutchLabel(hutch.label);
+      });
+    }
+  }, [isOpen, rabbit.currentHutchId]);
   
   // Slaughter options
   const [soldMeat, setSoldMeat] = useState(false);
@@ -55,9 +65,22 @@ export const MortalityModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, ra
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
         <div className="flex justify-between items-center mb-6">
-          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-            <Skull className="text-gray-600" size={20} /> Record Mortality
-          </h3>
+          <div className="flex flex-col">
+            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <Skull className="text-gray-600" size={20} /> Record Mortality
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5">
+              <span>{rabbit.tag} {rabbit.name ? `(${rabbit.name})` : ''}</span>
+              {hutchLabel && (
+                  <>
+                    <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+                    <span className="flex items-center gap-1 text-gray-600 font-medium">
+                        <Warehouse size={12} /> {hutchLabel}
+                    </span>
+                  </>
+              )}
+            </p>
+          </div>
           <button onClick={onClose} className="p-1 text-gray-400 hover:bg-gray-100 rounded">
             <X size={20} />
           </button>

@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
-import { X, DollarSign } from 'lucide-react';
+import { X, DollarSign, User, Search, Check } from 'lucide-react';
 import { FarmService } from '../services/farmService';
-import { TransactionType } from '../types';
+import { TransactionType, Customer } from '../types';
 import { useAlert } from '../contexts/AlertContext';
 import { useFarm } from '../contexts/FarmContext';
 
@@ -21,15 +21,50 @@ export const TransactionFormModal: React.FC<Props> = ({ isOpen, onClose, onSucce
     category: '',
     amount: '',
     date: new Date().toISOString().split('T')[0],
-    notes: ''
+    notes: '',
+    customerId: undefined as string | undefined
   });
+
+  // Customer selection state
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [isNewCustomer, setIsNewCustomer] = useState(false);
+  const [customerContact, setCustomerContact] = useState({ phone: '', email: '' });
 
   // Set default category when modal opens or categories load
   React.useEffect(() => {
-     if (isOpen && transactionCategories.length > 0 && !formData.category) {
-         setFormData(prev => ({ ...prev, category: transactionCategories[0] }));
+     if (isOpen) {
+         setFormData({
+            type: TransactionType.Expense,
+            category: transactionCategories[0] || '',
+            amount: '',
+            date: new Date().toISOString().split('T')[0],
+            notes: '',
+            customerId: undefined
+         });
+         setSelectedCustomer(null);
+         setCustomerSearch('');
+         setIsNewCustomer(false);
+         setCustomerContact({ phone: '', email: '' });
+         
+         // Load customers
+         FarmService.getCustomers().then(setCustomers);
      }
   }, [isOpen, transactionCategories]);
+
+  const filteredCustomers: Customer[] = customers.filter(c => 
+    c.name.toLowerCase().includes(customerSearch.toLowerCase())
+  );
+
+  const handleCustomerSelect = (cust: Customer) => {
+    setSelectedCustomer(cust);
+    setFormData(prev => ({ ...prev, customerId: cust.id }));
+    setCustomerSearch(cust.name);
+    setIsNewCustomer(false);
+    setShowDropdown(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,13 +72,24 @@ export const TransactionFormModal: React.FC<Props> = ({ isOpen, onClose, onSucce
 
     setLoading(true);
     try {
-      await FarmService.addTransaction({
+      const payload: any = {
         type: formData.type,
         category: formData.category,
         amount: parseFloat(formData.amount),
         date: formData.date,
-        notes: formData.notes
-      });
+        notes: formData.notes,
+        customerId: formData.customerId
+      };
+
+      if (!formData.customerId && isNewCustomer && customerSearch) {
+        payload.customer = {
+            name: customerSearch,
+            phone: customerContact.phone,
+            email: customerContact.email
+        };
+      }
+
+      await FarmService.addTransaction(payload);
       showToast("Transaction saved successfully", 'success');
       onSuccess();
       onClose();
@@ -53,8 +99,13 @@ export const TransactionFormModal: React.FC<Props> = ({ isOpen, onClose, onSucce
         category: transactionCategories[0] || '',
         amount: '',
         date: new Date().toISOString().split('T')[0],
-        notes: ''
+        notes: '',
+        customerId: undefined
       });
+      setSelectedCustomer(null);
+      setCustomerSearch('');
+      setIsNewCustomer(false);
+      setCustomerContact({ phone: '', email: '' });
     } catch (error) {
       console.error(error);
       showToast("Failed to add transaction", 'error');
@@ -133,7 +184,6 @@ export const TransactionFormModal: React.FC<Props> = ({ isOpen, onClose, onSucce
               </div>
             </div>
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
             <select 
@@ -143,6 +193,123 @@ export const TransactionFormModal: React.FC<Props> = ({ isOpen, onClose, onSucce
             >
               {transactionCategories.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
+          </div>
+
+          {/* Customer Selection */}
+          <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 space-y-2 relative">
+            <div className="flex justify-between items-center">
+                <label className="block text-sm font-medium text-gray-700 flex items-center gap-1.5">
+                <User size={14} className="text-gray-400" /> Link to Customer (Optional)
+                </label>
+                {selectedCustomer && (
+                    <button 
+                        type="button" 
+                        onClick={() => {
+                            setSelectedCustomer(null);
+                            setFormData(prev => ({ ...prev, customerId: undefined }));
+                            setCustomerSearch('');
+                            setIsNewCustomer(false);
+                        }}
+                        className="text-[10px] text-farm-600 hover:text-farm-700 font-medium"
+                    >
+                        Change
+                    </button>
+                )}
+            </div>
+
+            {selectedCustomer ? (
+                /* Selected Customer Card */
+                <div className="bg-white p-2.5 rounded-lg border border-gray-200 flex items-center gap-3 animate-fadeIn">
+                    <div className="bg-gray-50 p-1.5 rounded-full text-gray-500 border border-gray-100">
+                        <User size={14} />
+                    </div>
+                    <div>
+                        <div className="font-bold text-gray-900 text-xs leading-tight">{selectedCustomer.name}</div>
+                        {(selectedCustomer.phone || selectedCustomer.email) && (
+                            <div className="text-[10px] text-gray-500 mt-0.5">
+                                {selectedCustomer.phone} {selectedCustomer.phone && selectedCustomer.email && '•'} {selectedCustomer.email}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            ) : (
+                /* Search / New Customer Fields */
+                <>
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                        <input 
+                            type="text" 
+                            value={customerSearch}
+                            onChange={e => {
+                            setCustomerSearch(e.target.value);
+                            setShowDropdown(true);
+                            if (!e.target.value) {
+                                setSelectedCustomer(null);
+                                setFormData(prev => ({ ...prev, customerId: undefined }));
+                                setIsNewCustomer(false);
+                            } else {
+                                const currentId = formData.customerId;
+                                const matched = customers.find(cust => cust.id === currentId);
+                                if (matched && e.target.value !== matched.name) {
+                                    setFormData(prev => ({ ...prev, customerId: undefined }));
+                                    setSelectedCustomer(null);
+                                    setIsNewCustomer(true);
+                                } else if (!currentId) {
+                                    setIsNewCustomer(true);
+                                }
+                            }
+                            }}
+                            onFocus={() => setShowDropdown(true)}
+                            onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+                            className="w-full pl-9 pr-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm focus:ring-1 focus:ring-farm-500 outline-none"
+                            placeholder="Search or enter new name..."
+                        />
+                        {showDropdown && filteredCustomers.length > 0 && (
+                            <div className="absolute top-full left-0 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 z-20 max-h-40 overflow-y-auto">
+                            {filteredCustomers.map((custItem) => {
+                                const isSelected = selectedCustomer?.id === custItem.id;
+                                return (
+                                    <div 
+                                        key={custItem.id} 
+                                        onClick={() => handleCustomerSelect(custItem)}
+                                        className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm border-b border-gray-50 last:border-0 flex justify-between items-center"
+                                    >
+                                    <div>
+                                        <div className="font-bold text-gray-800">{custItem.name}</div>
+                                        {(custItem.phone || custItem.email) && (
+                                            <div className="text-[10px] text-gray-500">
+                                                {custItem.phone}{custItem.phone && custItem.email && ' • '}{custItem.email}
+                                            </div>
+                                        )}
+                                    </div>
+                                    {isSelected && <Check size={14} className="text-farm-600" />}
+                                    </div>
+                                );
+                            })}
+                            </div>
+                        )}
+                    </div>
+
+                    {isNewCustomer && (
+                        <div className="grid grid-cols-2 gap-2 mt-2 animate-fadeIn">
+                            <input 
+                                type="text" 
+                                value={customerContact.phone}
+                                onChange={e => setCustomerContact({...customerContact, phone: e.target.value})}
+                                className="px-2 py-1.5 bg-white border border-gray-200 rounded text-[11px] outline-none"
+                                placeholder="Phone (Optional)"
+                            />
+                            <input 
+                                type="email" 
+                                value={customerContact.email}
+                                onChange={e => setCustomerContact({...customerContact, email: e.target.value})}
+                                className="px-2 py-1.5 bg-white border border-gray-200 rounded text-[11px] outline-none"
+                                placeholder="Email (Optional)"
+                            />
+                        </div>
+                    )}
+                </>
+            )}
           </div>
 
           <div>

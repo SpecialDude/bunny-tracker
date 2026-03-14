@@ -671,7 +671,20 @@ export const FarmService = {
       await batch.commit();
   },
 
-  async moveRabbit(rabbitId: string, targetHutchId: string | null, purpose: string, notes?: string): Promise<void> {
+  async getRabbitsByHutchId(hutchId: string): Promise<Rabbit[]> {
+    if (isDemoMode()) {
+        return MOCK_STORE.rabbits.filter((r: Rabbit) => r.currentHutchId === hutchId);
+    }
+    if (!db) throw new Error("DB not initialized");
+    const farmId = getFarmId();
+    const snapshot = await db.collection(`farms/${farmId}/rabbits`)
+        .where('currentHutchId', '==', hutchId)
+        .get();
+        
+    return snapshot.docs.map(doc => convertDoc(doc) as Rabbit);
+  },
+
+  async moveRabbit(rabbitId: string, targetHutchId: string | null, purpose: string, notes?: string, overrideCapacity: boolean = false): Promise<void> {
     const userId = getUserId();
     const farmId = getFarmId();
     const timestamp = new Date();
@@ -714,7 +727,13 @@ export const FarmService = {
         if (newHutchSnap.empty) throw new Error("Target hutch not found");
         const newHutchDoc = newHutchSnap.docs[0];
         
-        batch.update(newHutchDoc.ref, { currentOccupancy: (newHutchDoc.data().currentOccupancy || 0) + 1 });
+        // Check Capacity
+        const hutchData = newHutchDoc.data();
+        if (!overrideCapacity && (hutchData.currentOccupancy || 0) >= hutchData.capacity) {
+            throw new Error(`Target hutch ${targetHutchId} is at capacity (${hutchData.capacity}). Please use override capacity to force move.`);
+        }
+        
+        batch.update(newHutchDoc.ref, { currentOccupancy: (hutchData.currentOccupancy || 0) + 1 });
 
         const newOccRef = db.collection(`farms/${farmId}/hutchOccupancy`).doc();
         batch.set(newOccRef, {
@@ -737,17 +756,169 @@ export const FarmService = {
   },
 
   async updateRabbit(id: string, updates: Partial<Rabbit>): Promise<void> {
+    // Strip currentHutchId to prevent silent occupancy changes
+    const { currentHutchId, ...safeUpdates } = updates as any;
+
     if (isDemoMode()) {
         const idx = MOCK_STORE.rabbits.findIndex((r: Rabbit) => r.id === id);
-        if (idx !== -1) MOCK_STORE.rabbits[idx] = { ...MOCK_STORE.rabbits[idx], ...updates };
+        if (idx !== -1) {
+            const oldRabbit = MOCK_STORE.rabbits[idx];
+            MOCK_STORE.rabbits[idx] = { ...oldRabbit, ...safeUpdates };
+            
+            // Sync names if updated
+            if (updates.name !== undefined && updates.name !== oldRabbit.name) {
+                MOCK_STORE.crossings.forEach((c: any) => {
+                    if (c.doeId === oldRabbit.tag) c.doeName = updates.name;
+                    if (c.sireId === oldRabbit.tag) c.sireName = updates.name;
+                });
+            }
+        }
         return;
     }
+    
     if (!db) throw new Error("DB not initialized");
     const farmId = getFarmId();
-    await db.collection(`farms/${farmId}/rabbits`).doc(id).update({
-      ...updates,
+    
+    const rabbitRef = db.collection(`farms/${farmId}/rabbits`).doc(id);
+    const rabbitSnap = await rabbitRef.get();
+    if (!rabbitSnap.exists) throw new Error("Rabbit not found");
+    const oldRabbit = rabbitSnap.data() as Rabbit;
+
+    const batch = db.batch();
+    batch.update(rabbitRef, {
+      ...safeUpdates,
       updatedAt: new Date()
     });
+
+    // Name propagation logic: If name changed, update all historical mating records
+    if (updates.name !== undefined && updates.name !== oldRabbit.name) {
+        // Find crossings where this rabbit is mentioned as participant
+        const [doeCrossings, sireCrossings] = await Promise.all([
+            db.collection(`farms/${farmId}/crossings`).where('doeId', '==', oldRabbit.tag).get(),
+            db.collection(`farms/${farmId}/crossings`).where('sireId', '==', oldRabbit.tag).get()
+        ]);
+        
+        doeCrossings.forEach(doc => batch.update(doc.ref, { doeName: updates.name }));
+        sireCrossings.forEach(doc => batch.update(doc.ref, { sireName: updates.name }));
+    }
+
+    await batch.commit();
+  },
+
+  async moveRabbitWithKits(motherId: string, targetHutchId: string, purpose: string, weaningAgeDays: number, notes?: string, overrideCapacity: boolean = false): Promise<void> {
+    if (isDemoMode()) {
+        // Mock implementation for demo mode
+        const mother = MOCK_STORE.rabbits.find((r: any) => r.id === motherId);
+        if (!mother) throw new Error("Mother not found");
+        
+        const now = new Date();
+        const kitsToMove = MOCK_STORE.rabbits.filter((r: Rabbit) => {
+            if (r.parentage?.doeId !== mother.tag || r.currentHutchId !== mother.currentHutchId || r.status !== RabbitStatus.Alive) return false;
+            
+            if (!r.dateOfBirth) return false;
+            const ageDays = Math.floor((now.getTime() - new Date(r.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24));
+            return ageDays < weaningAgeDays;
+        });
+
+        mother.currentHutchId = targetHutchId;
+        kitsToMove.forEach((k: Rabbit) => k.currentHutchId = targetHutchId);
+        return;
+    }
+    
+    if (!db) throw new Error("DB not initialized");
+    
+    const farmId = getFarmId();
+    const userId = getUserId();
+    const timestamp = new Date();
+    
+    // 1. Get Mother
+    const motherRef = db.collection(`farms/${farmId}/rabbits`).doc(motherId);
+    const motherDoc = await motherRef.get();
+    if (!motherDoc.exists) throw new Error("Mother not found");
+    const motherData = motherDoc.data() as Rabbit;
+    
+    // 2. Get Dependent Kits
+    const now = new Date();
+    // Calculate cutoff date for weaning age
+    const cutoffDate = new Date();
+    cutoffDate.setDate(now.getDate() - weaningAgeDays);
+    
+    // Query kits that belong to this doe AND are in the same hutch
+    const kitsSnapshot = await db.collection(`farms/${farmId}/rabbits`)
+        .where('parentage.doeId', '==', motherData.tag)
+        .where('currentHutchId', '==', motherData.currentHutchId)
+        .where('status', '==', RabbitStatus.Alive)
+        .get();
+        
+    // Filter dependent kits by dateOfBirth client side since Firebase index limits
+    const dependentKits = kitsSnapshot.docs.filter(doc => {
+       const data = doc.data() as Rabbit;
+       if (!data.dateOfBirth) return false;
+       return new Date(data.dateOfBirth) > cutoffDate; 
+    });
+    
+    // 3. Batch prep
+    const batch = db.batch();
+    const allRabbitsToMove = [{ id: motherDoc.id, ref: motherRef, data: motherData }, ...dependentKits.map(k => ({ id: k.id, ref: k.ref, data: k.data() as Rabbit }))];
+    const moveCount = allRabbitsToMove.length;
+    
+    // 4. Leave Current Hutch
+    if (motherData.currentHutchId) {
+        const oldHutchSnap = await db.collection(`farms/${farmId}/hutches`)
+            .where('hutchId', '==', motherData.currentHutchId).get();
+            
+        if (!oldHutchSnap.empty) {
+            const currentVal = oldHutchSnap.docs[0].data().currentOccupancy || 0;
+            batch.update(oldHutchSnap.docs[0].ref, { currentOccupancy: Math.max(0, currentVal - moveCount) });
+        }
+    }
+    
+    // 5. Enter Target Hutch
+    const newHutchSnap = await db.collection(`farms/${farmId}/hutches`)
+        .where('hutchId', '==', targetHutchId).get();
+    if (newHutchSnap.empty) throw new Error("Target hutch not found");
+    const newHutchDoc = newHutchSnap.docs[0];
+    const hutchData = newHutchDoc.data();
+    
+    if (!overrideCapacity && (hutchData.currentOccupancy || 0) + moveCount > hutchData.capacity) {
+        throw new Error(`Target hutch ${targetHutchId} capacity (${hutchData.capacity}) exceeded. Moving ${moveCount} rabbits. Please use override capacity.`);
+    }
+    
+    batch.update(newHutchDoc.ref, { currentOccupancy: (hutchData.currentOccupancy || 0) + moveCount });
+    
+    // 6. Update Rabbits and Histories
+    for (const rabbit of allRabbitsToMove) {
+        // End old occupancy
+        if (rabbit.data.currentHutchId) {
+            const occSnap = await db.collection(`farms/${farmId}/hutchOccupancy`)
+                .where('rabbitId', '==', rabbit.id)
+                .where('hutchId', '==', rabbit.data.currentHutchId)
+                .where('endAt', '==', null)
+                .get();
+            occSnap.forEach(doc => { batch.update(doc.ref, { endAt: timestamp }); });
+        }
+        
+        // Start new occupancy
+        const newOccRef = db.collection(`farms/${farmId}/hutchOccupancy`).doc();
+        batch.set(newOccRef, {
+            id: newOccRef.id,
+            rabbitId: rabbit.id,
+            hutchId: targetHutchId,
+            hutchLabel: hutchData.label,
+            startAt: timestamp,
+            endAt: null,
+            purpose: purpose,
+            notes: notes || 'Moved with mother',
+            farmId: farmId,
+            ownerUid: userId,
+            createdAt: timestamp
+        });
+        
+        // Update rabbit doc
+        batch.update(rabbit.ref, { currentHutchId: targetHutchId, updatedAt: timestamp });
+    }
+    
+    await batch.commit();
   },
 
   async recordMortality(
@@ -871,6 +1042,22 @@ export const FarmService = {
     });
   },
 
+  async syncHutchOccupancy(hutchId: string, actualCount: number): Promise<void> {
+    if (isDemoMode()) {
+        const h = MOCK_STORE.hutches.find((h: any) => h.id === hutchId || h.hutchId === hutchId);
+        if (h) h.currentOccupancy = actualCount;
+        return;
+    }
+    if (!db) throw new Error("DB not initialized");
+    const farmId = getFarmId();
+    
+    // HutchDetail passes hutch.id which is the Firestore document ID
+    await db.collection(`farms/${farmId}/hutches`).doc(hutchId).update({
+      currentOccupancy: actualCount,
+      updatedAt: new Date()
+    });
+  },
+
   async updateHutch(id: string, updates: Partial<Hutch>): Promise<void> {
     if (isDemoMode()) return;
     if (!db) throw new Error("DB not initialized");
@@ -954,6 +1141,95 @@ export const FarmService = {
             if (moveConfig.sireDbId) await this.moveRabbit(moveConfig.sireDbId, moveConfig.targetHutchId, 'Mating', `Mating with ${data.doeId}`);
         }
     }
+  },
+
+  async syncHistoricalHutchLabels(): Promise<{ updated: number, errors: number }> {
+    if (isDemoMode()) {
+      let count = 0;
+      const rabbitMap = MOCK_STORE.rabbits.reduce((acc: any, r: Rabbit) => {
+        acc[r.tag] = r.currentHutchId;
+        return acc;
+      }, {} as Record<string, string | null>);
+      
+      const hutchMap = MOCK_STORE.hutches.reduce((acc: any, h: Hutch) => {
+        acc[h.hutchId] = h.label;
+        return acc;
+      }, {} as Record<string, string>);
+
+      MOCK_STORE.crossings.forEach((c: any) => {
+        let changed = false;
+        if (!c.doeHutchLabel && c.doeId && rabbitMap[c.doeId]) {
+          c.doeHutchLabel = hutchMap[rabbitMap[c.doeId]];
+          if (c.doeHutchLabel) changed = true;
+        }
+        if (!c.sireHutchLabel && c.sireId && rabbitMap[c.sireId]) {
+          c.sireHutchLabel = hutchMap[rabbitMap[c.sireId]];
+          if (c.sireHutchLabel) changed = true;
+        }
+        if (changed) count++;
+      });
+      return { updated: count, errors: 0 };
+    }
+
+    if (!db) throw new Error("DB not initialized");
+    const farmId = getFarmId();
+    
+    // 1. Fetch data
+    const [crossings, rabbits, hutches] = await Promise.all([
+      this.getCrossings(),
+      this.getRabbits(),
+      this.getHutches()
+    ]);
+
+    // 2. Build maps
+    const rabbitMap = rabbits.reduce((acc, r) => {
+      acc[r.tag] = r.currentHutchId || null;
+      return acc;
+    }, {} as Record<string, string | null>);
+
+    const hutchMap = hutches.reduce((acc, h) => {
+      acc[h.hutchId] = h.label;
+      return acc;
+    }, {} as Record<string, string>);
+
+    // 3. Update records
+    const batch = db.batch();
+    let updatedCount = 0;
+    
+    for (const c of crossings) {
+      if (c.doeHutchLabel && c.sireHutchLabel) continue;
+
+      const updates: any = {};
+      let hasUpdate = false;
+
+      if (!c.doeHutchLabel && c.doeId && rabbitMap[c.doeId]) {
+        const label = hutchMap[rabbitMap[c.doeId]!];
+        if (label) {
+          updates.doeHutchLabel = label;
+          hasUpdate = true;
+        }
+      }
+
+      if (!c.sireHutchLabel && c.sireId && rabbitMap[c.sireId]) {
+        const label = hutchMap[rabbitMap[c.sireId]!];
+        if (label) {
+          updates.sireHutchLabel = label;
+          hasUpdate = true;
+        }
+      }
+
+      if (hasUpdate) {
+        const ref = db.collection(`farms/${farmId}/crossings`).doc(c.id!);
+        batch.update(ref, { ...updates, updatedAt: new Date() });
+        updatedCount++;
+      }
+    }
+
+    if (updatedCount > 0) {
+      await batch.commit();
+    }
+
+    return { updated: updatedCount, errors: 0 };
   },
 
   async updateCrossingStatus(id: string, status: CrossingStatus, result?: 'Positive' | 'Negative'): Promise<void> {
@@ -1070,6 +1346,22 @@ export const FarmService = {
     return docRef.id;
   },
 
+  async updateCustomer(id: string, data: Partial<Customer>): Promise<void> {
+    if (isDemoMode()) {
+       const index = MOCK_STORE.customers.findIndex((c: any) => c.id === id);
+       if (index !== -1) {
+           MOCK_STORE.customers[index] = { ...MOCK_STORE.customers[index], ...data };
+       }
+       return;
+    }
+    if (!db) throw new Error("DB not initialized");
+    const farmId = getFarmId();
+    await db.collection(`farms/${farmId}/customers`).doc(id).update({
+       ...data,
+       updatedAt: new Date()
+    });
+  },
+
   // --- Finances (Sales & Transactions) ---
 
   async getTransactions(): Promise<Transaction[]> {
@@ -1085,16 +1377,81 @@ export const FarmService = {
     }
   },
 
-  async addTransaction(data: Omit<Transaction, 'id' | 'farmId'>): Promise<void> {
+  async addTransaction(data: Omit<Transaction, 'id' | 'farmId'> & { customer?: Omit<Customer, 'id' | 'farmId' | 'totalSpent'> }): Promise<void> {
     if (isDemoMode()) {
-        MOCK_STORE.transactions.push({ ...data, id: 'mock-txn-'+Math.random(), farmId: 'demo' });
+        const id = 'mock-txn-'+Math.random();
+        let customerId = data.customerId;
+
+        if (!customerId && data.customer) {
+            customerId = 'mock-cust-' + Math.random();
+            MOCK_STORE.customers.push({
+                ...data.customer,
+                id: customerId,
+                farmId: 'demo',
+                totalSpent: data.type === TransactionType.Income ? data.amount : 0,
+                lastPurchaseDate: data.type === TransactionType.Income ? new Date(data.date).toISOString() : undefined
+            });
+        }
+
+        MOCK_STORE.transactions.push({ ...data, id, farmId: 'demo', customerId });
+        
+        if (customerId && data.type === TransactionType.Income && !data.customer) {
+           const cust = MOCK_STORE.customers.find((c: any) => c.id === customerId);
+           if (cust) {
+               cust.totalSpent += data.amount;
+               cust.lastPurchaseDate = new Date(data.date).toISOString();
+           }
+        }
         return;
     }
     if (!db) throw new Error("DB not initialized");
     const userId = getUserId();
     const farmId = getFarmId();
+    const batch = db.batch();
+    
+    let customerId = data.customerId;
+
+    // 1. Handle New Customer
+    if (!customerId && data.customer) {
+        const custRef = db.collection(`farms/${farmId}/customers`).doc();
+        customerId = custRef.id;
+        batch.set(custRef, {
+            ...data.customer,
+            id: customerId,
+            farmId,
+            ownerUid: userId,
+            totalSpent: data.type === TransactionType.Income ? data.amount : 0,
+            lastPurchaseDate: data.type === TransactionType.Income ? new Date(data.date).toISOString() : null,
+            createdAt: new Date()
+        });
+    }
+
+    // 2. Add Transaction
     const docRef = db.collection(`farms/${farmId}/transactions`).doc();
-    await docRef.set({ ...data, id: docRef.id, farmId, ownerUid: userId, createdAt: new Date(), date: new Date(data.date).toISOString() });
+    batch.set(docRef, { 
+        ...data, 
+        id: docRef.id, 
+        farmId, 
+        ownerUid: userId, 
+        customerId: customerId || undefined,
+        createdAt: new Date(), 
+        date: new Date(data.date).toISOString() 
+    });
+
+    // 3. Update Existing Customer Total
+    if (data.customerId && data.type === TransactionType.Income) {
+        const custRef = db.collection(`farms/${farmId}/customers`).doc(data.customerId);
+        const custSnap = await custRef.get();
+        if (custSnap.exists) {
+            const currentTotal = custSnap.data()?.totalSpent || 0;
+            batch.update(custRef, { 
+                totalSpent: currentTotal + data.amount,
+                lastPurchaseDate: new Date(data.date).toISOString()
+            });
+        }
+    }
+
+    await batch.commit();
   },
 
   async recordSale(data: Omit<Sale, 'id' | 'farmId' | 'saleId'> & { customer?: Omit<Customer, 'id' | 'farmId' | 'totalSpent'> }): Promise<void> {
@@ -1118,6 +1475,7 @@ export const FarmService = {
     
     // 1. Handle Customer
     let customerId = data.customerId;
+
     if (customerId) {
         // Update Existing
         const custRef = db.collection(`farms/${farmId}/customers`).doc(customerId);
@@ -1172,6 +1530,7 @@ export const FarmService = {
       amount: data.amount,
       date: new Date(data.date).toISOString(),
       relatedId: saleRef.id,
+      customerId: customerId || undefined,
       notes: `Sale of ${data.rabbitIds.length} rabbit(s) to ${data.buyerName}.`
     });
 

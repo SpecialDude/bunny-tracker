@@ -101,20 +101,22 @@ export const SaleFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) =
           return;
       }
 
-      const exactMatch = customers.find(c => c.name.toLowerCase() === val.toLowerCase());
-      if (exactMatch) {
-          // If typed name matches exactly, auto-select? 
-          // Better to let user click, but we can hint.
-          // For now, assume new unless selected.
-      }
-      
-      // If we are typing and it's not a selected ID, it's potentially new
-      if (selectedCustomerId && val !== customers.find(c => c.id === selectedCustomerId)?.name) {
+      const selectedCust = customers.find(c => c.id === selectedCustomerId);
+      if (selectedCust && val !== selectedCust.name) {
+          // If editing name, lose the link
           setSelectedCustomerId(null);
+          setIsNewCustomer(true);
+      } else if (!selectedCustomerId) {
+          // Check if input matches an existing name exactly
+          const exactMatch = customers.find(c => c.name.toLowerCase() === val.toLowerCase());
+          if (exactMatch) {
+              // We could auto-select, but better to let user pick.
+              // For now, assume potentially new unless selected.
+              setIsNewCustomer(true); 
+          } else {
+              setIsNewCustomer(true);
+          }
       }
-      
-      // If no exact ID match, it is a new customer
-      setIsNewCustomer(true);
   };
 
   const toggleSelection = (id: string) => {
@@ -245,65 +247,98 @@ export const SaleFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) =
               
               {/* Customer Section */}
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-3 relative">
-                  <label className="block text-sm font-bold text-gray-700 flex items-center gap-2">
-                      <User size={16}/> Customer
-                  </label>
-                  
-                  {/* Name Input with Autocomplete */}
-                  <div className="relative">
-                      <input 
-                        required
-                        type="text" 
-                        value={customerSearch}
-                        onChange={e => handleCustomerInput(e.target.value)}
-                        onFocus={() => setShowDropdown(true)}
-                        // Delay blur to allow clicking dropdown items
-                        onBlur={() => setTimeout(() => setShowDropdown(false), 200)} 
-                        className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                        placeholder="Search or enter new name..."
-                      />
-                      {showDropdown && filteredCustomers.length > 0 && (
-                          <div className="absolute top-full left-0 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 z-20 max-h-40 overflow-y-auto">
-                              {filteredCustomers.map(c => (
-                                  <div 
-                                    key={c.id} 
-                                    onClick={() => handleCustomerSelect(c)}
-                                    className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm border-b border-gray-50 last:border-0"
-                                  >
-                                      <div className="font-bold text-gray-800">{c.name}</div>
-                                      {(c.phone || c.email) && <div className="text-xs text-gray-500">{c.phone || c.email}</div>}
-                                  </div>
-                              ))}
-                          </div>
-                      )}
+                  <div className="flex justify-between items-center">
+                    <label className="block text-sm font-bold text-gray-700 flex items-center gap-2">
+                        <User size={16}/> Customer
+                    </label>
+                    {selectedCustomerId && (
+                        <button 
+                            type="button" 
+                            onClick={() => {
+                                setSelectedCustomerId(null);
+                                setCustomerSearch('');
+                                setFormData(prev => ({ ...prev, buyerName: '', buyerPhone: '', buyerEmail: '' }));
+                            }}
+                            className="text-[10px] text-blue-600 hover:text-blue-700 font-medium"
+                        >
+                            Change
+                        </button>
+                    )}
                   </div>
-
-                  {/* New Customer / Details Fields */}
-                  {/* Show contact fields if we selected a customer (read only) OR if it's a new customer */}
-                  {(selectedCustomerId || isNewCustomer) && (
-                      <div className="grid grid-cols-1 gap-2 animate-fadeIn">
-                          <input 
-                            type="text" 
-                            value={formData.buyerPhone}
-                            onChange={e => setFormData({...formData, buyerPhone: e.target.value})}
-                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg outline-none text-sm"
-                            placeholder="Phone Number"
-                            disabled={!!selectedCustomerId} // Read-only if existing
-                          />
-                          <input 
-                            type="email" 
-                            value={formData.buyerEmail}
-                            onChange={e => setFormData({...formData, buyerEmail: e.target.value})}
-                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg outline-none text-sm"
-                            placeholder="Email (Optional)"
-                            disabled={!!selectedCustomerId}
-                          />
-                          {isNewCustomer && customerSearch && (
-                              <p className="text-xs text-green-600 flex items-center gap-1">
-                                  <UserPlus size={12}/> New customer will be saved.
-                              </p>
-                          )}
+                  
+                  {selectedCustomerId ? (
+                      /* Selected Customer View */
+                      <div className="bg-white p-3 rounded-lg border border-blue-100 flex items-center gap-3 animate-fadeIn">
+                          <div className="bg-blue-50 p-2 rounded-full text-blue-600 border border-blue-100">
+                              <User size={18} />
+                          </div>
+                          <div>
+                              <div className="font-bold text-gray-900 leading-tight">{formData.buyerName}</div>
+                              {(formData.buyerPhone || formData.buyerEmail) && (
+                                  <div className="text-[11px] text-gray-500 mt-0.5">
+                                      {formData.buyerPhone}{formData.buyerPhone && formData.buyerEmail && ' • '}{formData.buyerEmail}
+                                  </div>
+                              )}
+                          </div>
                       </div>
+                  ) : (
+                      /* Search / New Customer Form */
+                      <>
+                          <div className="relative">
+                              <input 
+                                required
+                                type="text" 
+                                value={customerSearch}
+                                onChange={e => handleCustomerInput(e.target.value)}
+                                onFocus={() => setShowDropdown(true)}
+                                onBlur={() => setTimeout(() => setShowDropdown(false), 200)} 
+                                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                                placeholder="Search or enter new name..."
+                              />
+                              {showDropdown && filteredCustomers.length > 0 && (
+                                  <div className="absolute top-full left-0 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 z-20 max-h-40 overflow-y-auto">
+                                      {filteredCustomers.map((cust: Customer) => (
+                                          <div 
+                                            key={cust.id} 
+                                            onClick={() => handleCustomerSelect(cust)}
+                                            className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm border-b border-gray-50 last:border-0"
+                                          >
+                                              <div className="font-bold text-gray-800">{cust.name}</div>
+                                              {(cust.phone || cust.email) && (
+                                                  <div className="text-[10px] text-gray-500">
+                                                      {cust.phone}{cust.phone && cust.email && ' • '}{cust.email}
+                                                  </div>
+                                              )}
+                                          </div>
+                                      ))}
+                                  </div>
+                              )}
+                          </div>
+
+                          {isNewCustomer && (
+                              <div className="grid grid-cols-1 gap-2 animate-fadeIn">
+                                  <input 
+                                    type="text" 
+                                    value={formData.buyerPhone}
+                                    onChange={e => setFormData({...formData, buyerPhone: e.target.value})}
+                                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg outline-none text-sm"
+                                    placeholder="Phone Number"
+                                  />
+                                  <input 
+                                    type="email" 
+                                    value={formData.buyerEmail}
+                                    onChange={e => setFormData({...formData, buyerEmail: e.target.value})}
+                                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg outline-none text-sm"
+                                    placeholder="Email (Optional)"
+                                  />
+                                  {customerSearch && (
+                                      <p className="text-xs text-green-600 flex items-center gap-1">
+                                          <UserPlus size={12}/> New customer will be saved.
+                                      </p>
+                                  )}
+                              </div>
+                          )}
+                      </>
                   )}
               </div>
 

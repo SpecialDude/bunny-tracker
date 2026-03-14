@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Activity, Calendar, CheckCircle2, XCircle, Baby, Loader2, Edit, ListPlus, RotateCw } from 'lucide-react';
+import { Plus, Activity, Calendar, CheckCircle2, XCircle, Baby, Loader2, Edit, ListPlus, RotateCw, Search, Filter } from 'lucide-react';
 import { Crossing, CrossingStatus } from '../types';
 import { FarmService } from '../services/farmService';
 import { CrossingFormModal } from './CrossingFormModal';
 import { DeliveryFormModal } from './DeliveryFormModal';
 import { RabbitFormModal } from './RabbitFormModal';
 import { useAlert } from '../contexts/AlertContext';
+import { TablePagination } from './TablePagination';
 
 export const BreedingList: React.FC = () => {
   const { showToast, showConfirm } = useAlert();
@@ -16,6 +17,12 @@ export const BreedingList: React.FC = () => {
   const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
   const [isRabbitModalOpen, setIsRabbitModalOpen] = useState(false); // For "Create Records"
   const [selectedCrossing, setSelectedCrossing] = useState<Crossing | undefined>(undefined);
+
+  // Pagination & Filtering
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState<CrossingStatus | 'All'>('All');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
 
   const fetchData = async () => {
     setLoading(true);
@@ -33,6 +40,32 @@ export const BreedingList: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Filter & Logic
+  const processedCrossings = React.useMemo(() => {
+    return crossings.filter(c => {
+        const matchesSearch = 
+            (c.doeName || c.doeId || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (c.sireName || c.sireId || '').toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesFilter = filterStatus === 'All' || c.status === filterStatus;
+        return matchesSearch && matchesFilter;
+    });
+  }, [crossings, searchTerm, filterStatus]);
+
+  // Pagination Logic
+  const totalPages = Math.ceil(processedCrossings.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedCrossings = processedCrossings.slice(startIndex, startIndex + itemsPerPage);
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+    }
+  };
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterStatus, itemsPerPage]);
 
   const handlePalpation = async (crossing: Crossing, result: 'Positive' | 'Negative') => {
     const confirmed = await showConfirm({
@@ -65,6 +98,28 @@ export const BreedingList: React.FC = () => {
       setIsRabbitModalOpen(true);
   };
 
+  const handleSyncHutches = async () => {
+    const confirmed = await showConfirm({
+      title: 'Sync Historical Hutch Labels',
+      message: 'This will attempt to backfill missing hutch labels for existing records using the rabbits\' current locations. Continue?',
+      confirmText: 'Sync Now'
+    });
+
+    if (!confirmed) return;
+
+    setLoading(true);
+    try {
+      const result = await FarmService.syncHistoricalHutchLabels();
+      showToast(`Successfully synced ${result.updated} records.`, 'success');
+      fetchData();
+    } catch (e) {
+      console.error(e);
+      showToast("Failed to sync records", 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getStatusBadge = (status: CrossingStatus) => {
     switch (status) {
       case CrossingStatus.Pending: return 'bg-yellow-100 text-yellow-800';
@@ -82,13 +137,51 @@ export const BreedingList: React.FC = () => {
           <h2 className="text-2xl font-bold text-gray-900">Breeding Program</h2>
           <p className="text-gray-500 text-sm">Track matings, pregnancies, and deliveries.</p>
         </div>
-        <button 
-          onClick={() => setIsCrossingModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-farm-600 text-white rounded-lg text-sm font-medium hover:bg-farm-700 shadow-sm transition-colors"
-        >
-          <Plus size={16} />
-          Record Mating
-        </button>
+        <div className="flex items-center gap-3">
+            <button 
+              onClick={handleSyncHutches}
+              className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50 shadow-sm transition-colors"
+              title="Backfill missing hutch labels for existing records"
+            >
+              <RotateCw size={16} className={loading ? 'animate-spin' : ''} />
+              Sync Hutch Labels
+            </button>
+            <button 
+              onClick={() => setIsCrossingModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-farm-600 text-white rounded-lg text-sm font-medium hover:bg-farm-700 shadow-sm transition-colors"
+            >
+              <Plus size={16} />
+              Record Mating
+            </button>
+        </div>
+      </div>
+
+      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+          <input
+            type="text"
+            placeholder="Search by Rabbit Name or ID..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-farm-500 text-sm"
+          />
+        </div>
+        <div className="flex gap-2">
+          <div className="relative">
+            <select 
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as any)}
+              className="appearance-none pl-10 pr-8 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-farm-500"
+            >
+              <option value="All">All Status</option>
+              {Object.values(CrossingStatus).map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+          </div>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden min-h-[300px]">
@@ -97,13 +190,26 @@ export const BreedingList: React.FC = () => {
             <Loader2 className="animate-spin mb-2" size={32} />
             <p>Loading records...</p>
           </div>
-        ) : crossings.length === 0 ? (
+        ) : processedCrossings.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-gray-400">
             <Activity size={48} className="mb-2 opacity-20" />
-            <p>No active breeding records.</p>
+            <p>No breeding records found.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
+            <TablePagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={processedCrossings.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={handlePageChange}
+              onItemsPerPageChange={setItemsPerPage}
+              startIndex={startIndex}
+              endIndex={startIndex + itemsPerPage}
+              label="records"
+              totalCount={crossings.length}
+              className="bg-gray-50/50 border-b border-gray-100"
+            />
             <table className="w-full text-left text-sm text-gray-500">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
@@ -115,13 +221,18 @@ export const BreedingList: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {crossings.map((cross) => (
+                {paginatedCrossings.map((cross) => (
                   <tr key={cross.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4">
-                      <div className="font-medium text-gray-900 flex items-center gap-2">
-                        <span className="text-pink-600 font-bold">♀ {cross.doeName || cross.doeId}</span>
-                        <span className="text-gray-300">x</span>
-                        <span className="text-blue-600 font-bold">♂ {cross.sireName || cross.sireId}</span>
+                      <div className="font-medium text-gray-900 flex flex-col gap-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-pink-600 font-bold">♀ {cross.doeName || cross.doeId}</span>
+                          {cross.doeHutchLabel && <span className="text-[10px] bg-pink-50 text-pink-700 px-1.5 py-0.5 rounded border border-pink-100">{cross.doeHutchLabel}</span>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-blue-600 font-bold">♂ {cross.sireName || cross.sireId}</span>
+                          {cross.sireHutchLabel && <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-100">{cross.sireHutchLabel}</span>}
+                        </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -222,6 +333,19 @@ export const BreedingList: React.FC = () => {
                 ))}
               </tbody>
             </table>
+            <TablePagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={processedCrossings.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={handlePageChange}
+              onItemsPerPageChange={setItemsPerPage}
+              startIndex={startIndex}
+              endIndex={startIndex + itemsPerPage}
+              label="records"
+              totalCount={crossings.length}
+              className="border-t border-gray-100"
+            />
           </div>
         )}
       </div>

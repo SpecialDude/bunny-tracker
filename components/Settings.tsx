@@ -346,7 +346,6 @@ export const Settings: React.FC = () => {
               // But JSZip keeps it consistent. Let's zip if user requested "package".
               // Actually, user said "selected all or multiple which should package them in a zip".
               // If single, user might prefer direct CSV. Let's do direct CSV for single.
-              const firstKey = selectedKeys[0];
               const fileObj = Object.values(zip.files)[0] as any;
               if (fileObj) {
                   const content = await fileObj.async('blob');

@@ -17,6 +17,7 @@ export const MedicalModal: React.FC<Props> = ({ isOpen, onClose, rabbit }) => {
   const [activeView, setActiveView] = useState<'history' | 'add'>('history');
   const [loading, setLoading] = useState(false);
   const [records, setRecords] = useState<MedicalRecord[]>([]);
+  const [hutchLabel, setHutchLabel] = useState<string | null>(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -42,6 +43,13 @@ export const MedicalModal: React.FC<Props> = ({ isOpen, onClose, rabbit }) => {
         cost: '',
         notes: ''
       });
+
+      if (rabbit.currentHutchId) {
+        FarmService.getHutches().then(hutches => {
+          const hutch = hutches.find(h => h.hutchId === rabbit.currentHutchId);
+          if (hutch) setHutchLabel(hutch.label);
+        });
+      }
     }
   }, [isOpen, rabbit]);
 
@@ -100,11 +108,21 @@ export const MedicalModal: React.FC<Props> = ({ isOpen, onClose, rabbit }) => {
         
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b border-gray-100 bg-white">
-          <div>
+          <div className="flex flex-col">
             <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
               <Stethoscope className="text-pink-600" size={20} /> Medical Records
             </h3>
-            <p className="text-sm text-gray-500">Rabbit: <strong>{rabbit.tag}</strong> ({rabbit.name})</p>
+            <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5">
+              <span>Rabbit: <strong>{rabbit.tag}</strong> {rabbit.name ? `(${rabbit.name})` : ''}</span>
+              {hutchLabel && (
+                  <>
+                    <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+                    <span className="flex items-center gap-1 text-pink-600 font-medium">
+                        <Activity size={12} /> {hutchLabel}
+                    </span>
+                  </>
+              )}
+            </p>
           </div>
           <button onClick={onClose} className="p-1 text-gray-400 hover:bg-gray-100 rounded">
             <X size={20} />

@@ -128,6 +128,8 @@ export interface Crossing {
   sireId: string;   // Tag
   doeName?: string; // Cache for display
   sireName?: string;// Cache for display
+  doeHutchLabel?: string; // Snapshot for identification
+  sireHutchLabel?: string; // Snapshot for identification
   dateOfCrossing: string;
   matingHutchId?: string; // Where mating occurred
   expectedPalpationDate: string;
@@ -162,6 +164,7 @@ export interface Transaction {
   amount: number;
   date: string;
   relatedId?: string; // ID of sold rabbit or medication
+  customerId?: string;
   notes: string;
   farmId: string;
 }

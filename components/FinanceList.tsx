@@ -5,7 +5,10 @@ import { Transaction, TransactionType, Customer } from '../types';
 import { FarmService } from '../services/farmService';
 import { TransactionFormModal } from './TransactionFormModal';
 import { SaleFormModal } from './SaleFormModal';
+import { CustomerFormModal } from './CustomerFormModal';
 import { useFarm } from '../contexts/FarmContext';
+import { TablePagination } from './TablePagination';
+import { Edit2 } from 'lucide-react';
 
 export const FinanceList: React.FC = () => {
   const { currencySymbol } = useFarm();
@@ -18,6 +21,13 @@ export const FinanceList: React.FC = () => {
   
   const [isTxnModalOpen, setIsTxnModalOpen] = useState(false);
   const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
+  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | undefined>(undefined);
+
+  // Pagination Support
+  const [txCurrentPage, setTxCurrentPage] = useState(1);
+  const [custCurrentPage, setCustCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
 
   const fetchData = async () => {
     setLoading(true);
@@ -53,6 +63,41 @@ export const FinanceList: React.FC = () => {
   const filteredTransactions = transactions.filter(t => 
     filter === 'All' || t.type === filter
   );
+
+  // Pagination Logic (Transactions)
+  const txTotalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
+  const txStartIndex = (txCurrentPage - 1) * itemsPerPage;
+  const paginatedTransactions = filteredTransactions.slice(txStartIndex, txStartIndex + itemsPerPage);
+
+  const handleTxPageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= txTotalPages) {
+      setTxCurrentPage(newPage);
+    }
+  };
+
+  // Pagination Logic (Customers)
+  const custTotalPages = Math.ceil(customers.length / itemsPerPage);
+  const custStartIndex = (custCurrentPage - 1) * itemsPerPage;
+  const paginatedCustomers = customers.slice(custStartIndex, custStartIndex + itemsPerPage);
+
+  const handleCustPageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= custTotalPages) {
+      setCustCurrentPage(newPage);
+    }
+  };
+
+  const handleEditCustomer = (customer: Customer) => {
+    setSelectedCustomer(customer);
+    setIsCustomerModalOpen(true);
+  };
+
+  useEffect(() => {
+    setTxCurrentPage(1);
+  }, [filter, itemsPerPage]);
+
+  useEffect(() => {
+    setCustCurrentPage(1);
+  }, [itemsPerPage]);
 
   return (
     <div className="space-y-6">
@@ -175,41 +220,77 @@ export const FinanceList: React.FC = () => {
                 </div>
                 ) : (
                 <div className="overflow-x-auto">
+                    <TablePagination
+                        currentPage={txCurrentPage}
+                        totalPages={txTotalPages}
+                        totalItems={filteredTransactions.length}
+                        itemsPerPage={itemsPerPage}
+                        onPageChange={handleTxPageChange}
+                        onItemsPerPageChange={setItemsPerPage}
+                        startIndex={txStartIndex}
+                        endIndex={txStartIndex + itemsPerPage}
+                        label="transactions"
+                        totalCount={transactions.length}
+                        className="bg-gray-50/50 border-b border-gray-100"
+                    />
                     <table className="w-full text-left text-sm text-gray-500">
                     <thead className="bg-gray-50 border-b border-gray-100">
                         <tr>
                         <th className="px-6 py-4 font-semibold text-gray-900">Date</th>
                         <th className="px-6 py-4 font-semibold text-gray-900">Category</th>
-                        <th className="px-6 py-4 font-semibold text-gray-900">Description</th>
+                        <th className="px-6 py-4 font-semibold text-gray-900">Description / Customer</th>
                         <th className="px-6 py-4 font-semibold text-gray-900 text-right">Amount</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                        {filteredTransactions.map((txn) => (
-                        <tr key={txn.id} className="hover:bg-gray-50 transition-colors">
-                            <td className="px-6 py-4 whitespace-nowrap">{txn.date}</td>
-                            <td className="px-6 py-4">
-                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${
-                                txn.type === TransactionType.Income 
-                                ? 'bg-green-50 text-green-700 border-green-100' 
-                                : 'bg-red-50 text-red-700 border-red-100'
-                            }`}>
-                                {txn.type === TransactionType.Income ? <ArrowUpRight size={12}/> : <ArrowDownRight size={12}/>}
-                                {txn.category}
-                            </span>
-                            </td>
-                            <td className="px-6 py-4 max-w-xs truncate" title={txn.notes}>
-                            {txn.notes || '-'}
-                            </td>
-                            <td className={`px-6 py-4 text-right font-medium ${
-                            txn.type === TransactionType.Income ? 'text-green-600' : 'text-red-600'
-                            }`}>
-                            {txn.type === TransactionType.Income ? '+' : '-'}{currencySymbol}{txn.amount.toFixed(2)}
-                            </td>
-                        </tr>
-                        ))}
+                        {paginatedTransactions.map((txn) => {
+                          const linkedCustomer = txn.customerId ? customers.find(c => c.id === txn.customerId) : null;
+                          return (
+                            <tr key={txn.id} className="hover:bg-gray-50 transition-colors">
+                                <td className="px-6 py-4 whitespace-nowrap">{txn.date}</td>
+                                <td className="px-6 py-4">
+                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                                    txn.type === TransactionType.Income 
+                                    ? 'bg-green-50 text-green-700 border-green-100' 
+                                    : 'bg-red-50 text-red-700 border-red-100'
+                                }`}>
+                                    {txn.type === TransactionType.Income ? <ArrowUpRight size={12}/> : <ArrowDownRight size={12}/>}
+                                    {txn.category}
+                                </span>
+                                </td>
+                                <td className="px-6 py-4 max-w-xs">
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="truncate" title={txn.notes}>{txn.notes || '-'}</span>
+                                    {linkedCustomer && (
+                                        <span className="text-[10px] text-farm-600 flex items-center gap-1">
+                                            <Users size={10} /> {linkedCustomer.name}
+                                        </span>
+                                    )}
+                                </div>
+                                </td>
+                                <td className={`px-6 py-4 text-right font-medium ${
+                                txn.type === TransactionType.Income ? 'text-green-600' : 'text-red-600'
+                                }`}>
+                                {txn.type === TransactionType.Income ? '+' : '-'}{currencySymbol}{txn.amount.toFixed(2)}
+                                </td>
+                            </tr>
+                          );
+                        })}
                     </tbody>
                     </table>
+                    <TablePagination
+                        currentPage={txCurrentPage}
+                        totalPages={txTotalPages}
+                        totalItems={filteredTransactions.length}
+                        itemsPerPage={itemsPerPage}
+                        onPageChange={handleTxPageChange}
+                        onItemsPerPageChange={setItemsPerPage}
+                        startIndex={txStartIndex}
+                        endIndex={txStartIndex + itemsPerPage}
+                        label="transactions"
+                        totalCount={transactions.length}
+                        className="border-t border-gray-100"
+                    />
                 </div>
                 )}
             </>
@@ -229,6 +310,19 @@ export const FinanceList: React.FC = () => {
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
+                        <TablePagination
+                            currentPage={custCurrentPage}
+                            totalPages={custTotalPages}
+                            totalItems={customers.length}
+                            itemsPerPage={itemsPerPage}
+                            onPageChange={handleCustPageChange}
+                            onItemsPerPageChange={setItemsPerPage}
+                            startIndex={custStartIndex}
+                            endIndex={custStartIndex + itemsPerPage}
+                            label="customers"
+                            totalCount={customers.length}
+                            className="bg-gray-50/50 border-b border-gray-100"
+                        />
                         <table className="w-full text-left text-sm text-gray-500">
                             <thead className="bg-gray-50 border-b border-gray-100">
                                 <tr>
@@ -236,16 +330,17 @@ export const FinanceList: React.FC = () => {
                                     <th className="px-6 py-4 font-semibold text-gray-900">Contact</th>
                                     <th className="px-6 py-4 font-semibold text-gray-900">Last Purchase</th>
                                     <th className="px-6 py-4 font-semibold text-gray-900 text-right">Total Spent</th>
+                                    <th className="px-6 py-4 font-semibold text-gray-900 text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                                {customers.map(cust => (
-                                    <tr key={cust.id} className="hover:bg-gray-50">
+                                {paginatedCustomers.map(cust => (
+                                    <tr key={cust.id} className="hover:bg-gray-50 transition-colors">
                                         <td className="px-6 py-4 font-bold text-gray-900">{cust.name}</td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex flex-col gap-1 text-xs">
-                                                {cust.phone && <div className="flex items-center gap-1"><Phone size={12}/> {cust.phone}</div>}
-                                                {cust.email && <div className="flex items-center gap-1"><Mail size={12}/> {cust.email}</div>}
+                                        <td className="px-6 py-4 text-xs">
+                                            <div className="flex flex-col gap-1">
+                                                {cust.phone && <div className="flex items-center gap-1.5"><Phone size={12} className="text-gray-400"/> {cust.phone}</div>}
+                                                {cust.email && <div className="flex items-center gap-1.5"><Mail size={12} className="text-gray-400"/> {cust.email}</div>}
                                                 {!cust.phone && !cust.email && <span className="italic text-gray-400">No contact info</span>}
                                             </div>
                                         </td>
@@ -253,10 +348,32 @@ export const FinanceList: React.FC = () => {
                                         <td className="px-6 py-4 text-right font-medium text-green-700">
                                             {currencySymbol}{cust.totalSpent.toLocaleString()}
                                         </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <button 
+                                                onClick={() => handleEditCustomer(cust)}
+                                                className="p-1.5 text-gray-400 hover:text-farm-600 hover:bg-farm-50 rounded transition-colors"
+                                                title="Edit Customer"
+                                            >
+                                                <Edit2 size={16} />
+                                            </button>
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
+                        <TablePagination
+                            currentPage={custCurrentPage}
+                            totalPages={custTotalPages}
+                            totalItems={customers.length}
+                            itemsPerPage={itemsPerPage}
+                            onPageChange={handleCustPageChange}
+                            onItemsPerPageChange={setItemsPerPage}
+                            startIndex={custStartIndex}
+                            endIndex={custStartIndex + itemsPerPage}
+                            label="customers"
+                            totalCount={customers.length}
+                            className="border-t border-gray-100"
+                        />
                     </div>
                 )}
             </>
@@ -274,6 +391,18 @@ export const FinanceList: React.FC = () => {
         onClose={() => setIsSaleModalOpen(false)}
         onSuccess={fetchData}
       />
+
+      {selectedCustomer && (
+        <CustomerFormModal
+          isOpen={isCustomerModalOpen}
+          onClose={() => {
+            setIsCustomerModalOpen(false);
+            setSelectedCustomer(undefined);
+          }}
+          onSuccess={fetchData}
+          customer={selectedCustomer}
+        />
+      )}
     </div>
   );
 };
