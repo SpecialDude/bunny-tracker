@@ -18,13 +18,63 @@ export const AIChat: React.FC = () => {
   const [contextLoading, setContextLoading] = useState(false);
   const [farmContext, setFarmContext] = useState('');
   const [mode, setMode] = useState<'assistant' | 'search'>('assistant');
+  const [isVisible, setIsVisible] = useState(true);
+  const [isMinimized, setIsMinimized] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const lastScrollY = useRef(0);
+  const inactivityTimer = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Handle scroll to hide/show and minimize
+  useEffect(() => {
+    const resetInactivityTimer = () => {
+        if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+        setIsMinimized(false);
+        if (!isOpen) {
+            inactivityTimer.current = setTimeout(() => {
+                setIsMinimized(true);
+            }, 5000); // Minimize after 5s of no activity
+        }
+    };
+
+    const handleScroll = () => {
+      const container = document.getElementById('main-content');
+      const currentScrollY = window.scrollY || document.documentElement.scrollTop;
+      const containerScrollY = container?.scrollTop || 0;
+      const totalScroll = currentScrollY + containerScrollY;
+      
+      // Hide on scroll down, show on scroll up
+      if (totalScroll > lastScrollY.current + 10 && totalScroll > 50) {
+        setIsVisible(false);
+      } else if (totalScroll < lastScrollY.current - 10) {
+        setIsVisible(true);
+      }
+      
+      lastScrollY.current = totalScroll;
+      resetInactivityTimer();
+    };
+
+    // Listen to mouse movements to un-minimize
+    const handleMouseMove = () => resetInactivityTimer();
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    document.addEventListener('scroll', handleScroll, { capture: true, passive: true });
+    window.addEventListener('mousemove', handleMouseMove);
+    
+    resetInactivityTimer(); // Initial timer
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      document.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('mousemove', handleMouseMove);
+      if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+    };
+  }, [isOpen]);
 
   // Fetch real data when chat is opened
   useEffect(() => {
@@ -139,16 +189,26 @@ export const AIChat: React.FC = () => {
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 bg-farm-600 hover:bg-farm-700 text-white p-4 rounded-full shadow-xl transition-all z-50 flex items-center gap-2"
+        className={`fixed bottom-4 right-4 md:bottom-6 md:right-6 bg-farm-600/80 hover:bg-farm-700 text-white p-3 md:p-4 rounded-full shadow-lg transition-all duration-500 z-50 flex items-center gap-2 ${
+          isVisible ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-20 opacity-0 scale-90 pointer-events-none'
+        } backdrop-blur-md group hover:shadow-2xl active:scale-95 ${
+          isMinimized ? 'w-12 h-12 md:w-14 md:h-14 justify-center p-0' : 'px-4'
+        }`}
       >
-        <MessageSquare size={24} />
-        <span className="hidden md:inline font-medium">AI Assistant</span>
+        <MessageSquare size={20} className="md:w-6 md:h-6 group-hover:rotate-12 transition-transform shrink-0" />
+        <span className={`font-medium pr-1 transition-all duration-300 overflow-hidden whitespace-nowrap ${
+          isMinimized ? 'w-0 opacity-0' : 'w-auto opacity-100 ml-1'
+        } hidden md:inline`}>
+          AI Assistant
+        </span>
       </button>
     );
   }
 
   return (
-    <div className="fixed bottom-6 right-6 w-[90vw] md:w-96 h-[600px] bg-white rounded-xl shadow-2xl border border-gray-200 z-50 flex flex-col overflow-hidden">
+    <div className={`fixed bottom-4 right-4 md:bottom-6 md:right-6 w-[92vw] md:w-96 h-[500px] md:h-[600px] bg-white/95 rounded-xl shadow-2xl border border-gray-200 z-50 flex flex-col overflow-hidden transition-all duration-500 ${
+      isVisible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'
+    } backdrop-blur-lg`}>
       {/* Header */}
       <div className="bg-farm-600 p-4 flex justify-between items-center text-white">
         <div className="flex items-center gap-2">
