@@ -54,8 +54,9 @@ export const TransactionFormModal: React.FC<Props> = ({ isOpen, onClose, onSucce
      }
   }, [isOpen, transactionCategories]);
 
-  const filteredCustomers: Customer[] = customers.filter(c => 
-    c.name.toLowerCase().includes(customerSearch.toLowerCase())
+  const filteredCustomers = React.useMemo(() => 
+    customers.filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase())),
+    [customers, customerSearch]
   );
 
   const handleCustomerSelect = (cust: Customer) => {
@@ -266,8 +267,8 @@ export const TransactionFormModal: React.FC<Props> = ({ isOpen, onClose, onSucce
                         />
                         {showDropdown && filteredCustomers.length > 0 && (
                             <div className="absolute top-full left-0 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 z-20 max-h-40 overflow-y-auto">
-                            {filteredCustomers.map((custItem) => {
-                                const isSelected = selectedCustomer?.id === custItem.id;
+                             {filteredCustomers.map((custItem: Customer) => {
+                                const isSelected = (selectedCustomer as any)?.id === (custItem as any).id;
                                 return (
                                     <div 
                                         key={custItem.id} 
