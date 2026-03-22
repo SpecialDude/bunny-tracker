@@ -120,9 +120,10 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
       showToast("Mating recorded & rabbits moved successfully", 'success');
       onSuccess();
       onClose();
-    } catch (error) {
-      console.error(error);
-      showToast("Failed to record mating", 'error');
+    } catch (error: any) {
+      console.error('Mating record error:', error);
+      const message = error?.message || 'An unknown error occurred';
+      showToast(`Failed to record mating: ${message}`, 'error');
     } finally {
       setLoading(false);
     }

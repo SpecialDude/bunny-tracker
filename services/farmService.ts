@@ -1133,12 +1133,13 @@ export const FarmService = {
       updatedAt: new Date()
     });
 
+    // Mating moves are temporary visits — always override capacity so they aren't blocked
     if (moveConfig && moveConfig.targetHutchId) {
-        if (moveConfig.mode === 'sire_visit_doe' && moveConfig.sireDbId) await this.moveRabbit(moveConfig.sireDbId, moveConfig.targetHutchId, 'Mating', `Visiting Doe ${data.doeId}`);
-        else if (moveConfig.mode === 'doe_visit_sire' && moveConfig.doeDbId) await this.moveRabbit(moveConfig.doeDbId, moveConfig.targetHutchId, 'Mating', `Visiting Buck ${data.sireId}`);
+        if (moveConfig.mode === 'sire_visit_doe' && moveConfig.sireDbId) await this.moveRabbit(moveConfig.sireDbId, moveConfig.targetHutchId, 'Mating', `Visiting Doe ${data.doeId}`, true);
+        else if (moveConfig.mode === 'doe_visit_sire' && moveConfig.doeDbId) await this.moveRabbit(moveConfig.doeDbId, moveConfig.targetHutchId, 'Mating', `Visiting Buck ${data.sireId}`, true);
         else if (moveConfig.mode === 'neutral') {
-            if (moveConfig.doeDbId) await this.moveRabbit(moveConfig.doeDbId, moveConfig.targetHutchId, 'Mating', `Mating with ${data.sireId}`);
-            if (moveConfig.sireDbId) await this.moveRabbit(moveConfig.sireDbId, moveConfig.targetHutchId, 'Mating', `Mating with ${data.doeId}`);
+            if (moveConfig.doeDbId) await this.moveRabbit(moveConfig.doeDbId, moveConfig.targetHutchId, 'Mating', `Mating with ${data.sireId}`, true);
+            if (moveConfig.sireDbId) await this.moveRabbit(moveConfig.sireDbId, moveConfig.targetHutchId, 'Mating', `Mating with ${data.doeId}`, true);
         }
     }
   },

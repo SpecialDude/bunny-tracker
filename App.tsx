@@ -83,17 +83,21 @@ const AppContent = () => {
   );
 };
 
+import * as Sentry from '@sentry/react';
+
 function App() {
   return (
-    <AuthProvider>
-      <AlertProvider>
-        <FarmProvider>
-          <NotificationProvider>
-            <AppContent />
-          </NotificationProvider>
-        </FarmProvider>
-      </AlertProvider>
-    </AuthProvider>
+    <Sentry.ErrorBoundary fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50"><p className="text-red-600 font-medium">Something went wrong. Please refresh the page.</p></div>}>
+      <AuthProvider>
+        <AlertProvider>
+          <FarmProvider>
+            <NotificationProvider>
+              <AppContent />
+            </NotificationProvider>
+          </FarmProvider>
+        </AlertProvider>
+      </AuthProvider>
+    </Sentry.ErrorBoundary>
   );
 }
 
