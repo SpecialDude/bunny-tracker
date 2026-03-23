@@ -17,7 +17,7 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
-  const { farmName, currencySymbol } = useFarm();
+  const { farmName, currencySymbol, notificationLeadDays } = useFarm();
   const [loading, setLoading] = useState(true);
   
   // Data State
@@ -34,7 +34,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
 
   useEffect(() => {
     fetchDashboardData();
-  }, [currencySymbol]); // Re-calculate if currency changes
+  }, [currencySymbol, notificationLeadDays]); // Re-calculate if currency or lead days change
 
   const fetchDashboardData = async () => {
     try {
@@ -135,16 +135,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const prepareTasks = (cList: Crossing[]) => {
     const tasks: any[] = [];
     const today = new Date();
-    const threeDaysOut = new Date();
-    threeDaysOut.setDate(today.getDate() + 3);
+    const leadDaysOut = new Date();
+    leadDaysOut.setDate(today.getDate() + notificationLeadDays);
 
     // Filter active crossings
     cList.forEach(c => {
       if (c.status === CrossingStatus.Pregnant) {
         const deliveryDate = new Date(c.expectedDeliveryDate);
-        if (deliveryDate <= threeDaysOut) {
+        if (deliveryDate <= leadDaysOut) {
            tasks.push({
-             title: `Delivery Due: ${c.doeName || c.doeId}`,
+             title: `Delivery Due: ${c.doeName ? c.doeName + ' (' + c.doeId + ')' : c.doeId}`,
+             subTitle: `Location: ${c.doeHutchLabel || 'Unknown'}`,
              date: c.expectedDeliveryDate,
              type: 'Urgent',
              color: 'text-red-600 bg-red-50'
@@ -152,9 +153,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
         }
       } else if (c.status === CrossingStatus.Pending) {
          const palpDate = new Date(c.expectedPalpationDate);
-         if (palpDate <= today) {
+         if (palpDate <= leadDaysOut) {
            tasks.push({
-             title: `Palpation Check: ${c.doeName || c.doeId}`,
+             title: `Palpation Check: ${c.doeName ? c.doeName + ' (' + c.doeId + ')' : c.doeId}`,
+             subTitle: `Mated with: ${c.sireName || c.sireId} | Location: ${c.doeHutchLabel || 'Unknown'}`,
              date: c.expectedPalpationDate,
              type: 'Due',
              color: 'text-blue-600 bg-blue-50'
@@ -319,7 +321,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
         
         {upcomingTasks.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
-             <p>No pending palpations or deliveries due in the next 3 days.</p>
+             <p>No pending palpations or deliveries due in the next {notificationLeadDays} days.</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
@@ -327,7 +329,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
               <div key={i} className="p-4 flex items-center justify-between hover:bg-gray-50">
                 <div className="flex items-center gap-3">
                   <div className={`w-2 h-2 rounded-full ${task.type === 'Urgent' ? 'bg-red-500' : 'bg-blue-500'}`}></div>
-                  <span className="text-gray-700 font-medium">{task.title}</span>
+                  <div className="flex flex-col">
+                    <span className="text-gray-700 font-bold">{task.title}</span>
+                    {task.subTitle && <span className="text-xs text-gray-500 font-medium">{task.subTitle}</span>}
+                  </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-sm text-gray-500">{task.date}</span>

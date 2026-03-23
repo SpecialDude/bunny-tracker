@@ -11,6 +11,7 @@ interface FarmContextType {
   breeds: Breed[];
   transactionCategories: string[];
   defaultWeaningDays: number;
+  notificationLeadDays: number;
   loading: boolean;
   refreshFarm: () => Promise<void>;
 }
@@ -26,6 +27,7 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [breeds, setBreeds] = useState<Breed[]>([]);
   const [transactionCategories, setTransactionCategories] = useState<string[]>([]);
   const [defaultWeaningDays, setDefaultWeaningDays] = useState(35);
+  const [notificationLeadDays, setNotificationLeadDays] = useState(3);
   const [loading, setLoading] = useState(true);
 
   const getSymbol = (code: string) => {
@@ -49,6 +51,9 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (settings.defaultWeaningDays) {
            setDefaultWeaningDays(settings.defaultWeaningDays);
         }
+        if (settings.notificationLeadDays !== undefined) {
+           setNotificationLeadDays(settings.notificationLeadDays);
+        }
       }
     } catch (error) {
       console.error("Error fetching farm context:", error);
@@ -69,6 +74,7 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
       breeds,
       transactionCategories,
       defaultWeaningDays,
+      notificationLeadDays,
       loading, 
       refreshFarm 
     }}>

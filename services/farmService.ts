@@ -1798,57 +1798,96 @@ export const FarmService = {
   },
 
   async runDailyChecks(): Promise<void> {
-    if (isDemoMode()) return;
-    if (!db) return; // Silent return if DB is not ready (e.g. strict types in build)
+    // We proceed even in demo mode to populate MOCK_STORE
+    const isMock = isDemoMode();
+    if (!db && !isMock) return; // Silent return if DB is truly broken and not in demo
     
     const farmId = getFarmId();
     const userId = getUserId();
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
     
+    const todayNotifs = await this.getNotifications(50); // Fetch recent to check for duplicates
+    const existingTitles = new Set(todayNotifs.filter(n => n.date === todayStr).map(n => n.title));
+
     // Helper to add notification if unique
     const addNotify = async (data: Omit<AppNotification, 'id' | 'farmId'>) => {
+        if (isMock) {
+            const exists = MOCK_STORE.notifications.some((n: any) => n.title === data.title && n.date === todayStr);
+            if (!exists) {
+                MOCK_STORE.notifications.push({ ...data, id: 'notif-' + Math.random(), farmId: 'demo', read: false });
+            }
+            return;
+        }
         if (!db) return;
-        const q = await db.collection(`farms/${farmId}/notifications`).where('title', '==', data.title).where('date', '>=', todayStr).get();
-        if (q.empty) {
+        
+        // Use the in-memory Set to avoid compound query index errors and reduce reads
+        if (!existingTitles.has(data.title)) {
             await db.collection(`farms/${farmId}/notifications`).add(this.cleanPayload({ ...data, farmId, ownerUid: userId, createdAt: new Date(), read: false }));
+            existingTitles.add(data.title); // Prevent duplicates in the same run
         }
     };
 
     const farmSettings = await this.getFarmSettings();
     const leadDays = farmSettings?.notificationLeadDays ?? 3;
     const weaningAge = farmSettings?.defaultWeaningDays ?? 35;
-
     const crossings = await this.getCrossings();
-    crossings.forEach(c => {
+    for (const c of crossings) {
+        const diffLeadDays = leadDays;
         if (c.status === CrossingStatus.Pregnant) {
             const deliveryDate = new Date(c.expectedDeliveryDate);
             const diffTime = deliveryDate.getTime() - now.getTime();
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-            if (diffDays <= leadDays && diffDays >= 0) {
-                addNotify({ type: 'Urgent', title: `Delivery Due: ${c.doeId}`, message: `Doe ${c.doeId} is expected to deliver in ${diffDays} day(s).`, date: todayStr, read: false, linkTo: 'breeding' });
+            if (diffDays <= diffLeadDays && diffDays >= 0) {
+                const doeDisplay = c.doeName ? `${c.doeName} (${c.doeId})` : c.doeId;
+                const location = c.doeHutchLabel ? ` in ${c.doeHutchLabel}` : '';
+                await addNotify({ 
+                    type: 'Urgent', 
+                    title: `Delivery Due: ${doeDisplay}`, 
+                    message: `Doe ${doeDisplay}${location} is expected to deliver in ${diffDays} day(s).`, 
+                    date: todayStr, 
+                    read: false, 
+                    linkTo: 'breeding' 
+                });
             }
         }
         if (c.status === CrossingStatus.Pending) {
              const palpDate = new Date(c.expectedPalpationDate);
              const diffTime = palpDate.getTime() - now.getTime();
              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-             if (diffDays <= leadDays && diffDays >= 0) {
-                 addNotify({ type: 'Info', title: `Palpation Check: ${c.doeId}`, message: `Check pregnancy for mating with ${c.sireId} in ${diffDays} day(s).`, date: todayStr, read: false, linkTo: 'breeding' });
+             if (diffDays <= diffLeadDays && diffDays >= 0) {
+                 const doeDisplay = c.doeName ? `${c.doeName} (${c.doeId})` : c.doeId;
+                 const location = c.doeHutchLabel ? ` in ${c.doeHutchLabel}` : '';
+                 await addNotify({ 
+                    type: 'Info', 
+                    title: `Palpation Check: ${doeDisplay}`, 
+                    message: `Check pregnancy for mating with ${c.sireId} in ${diffDays} day(s). Location: ${location || 'N/A'}`, 
+                    date: todayStr, 
+                    read: false, 
+                    linkTo: 'breeding' 
+                 });
              }
         }
-    });
+    }
 
     const rabbits = await this.getRabbits();
-    rabbits.forEach(r => {
+    for (const r of rabbits) {
         if (r.dateOfBirth && r.status === RabbitStatus.Alive) {
              const dob = new Date(r.dateOfBirth);
              const ageDays = Math.floor((now.getTime() - dob.getTime()) / (1000 * 60 * 60 * 24));
              const daysToWeaning = weaningAge - ageDays;
              if (daysToWeaning <= leadDays && daysToWeaning >= 0) {
-                 addNotify({ type: 'Warning', title: `Weaning Due: ${r.tag}`, message: `Rabbit ${r.tag} is ready for weaning in ${daysToWeaning} day(s).`, date: todayStr, read: false, linkTo: 'rabbits' });
+                 const name = r.name ? `${r.name} (${r.tag})` : r.tag;
+                 await addNotify({ 
+                    type: 'Warning', 
+                    title: `Weaning Due: ${name}`, 
+                    message: `Rabbit ${name} is ready for weaning in ${daysToWeaning} day(s). Current Hutch: ${r.currentHutchId || 'Unknown'}`, 
+                    date: todayStr, 
+                    read: false, 
+                    linkTo: 'rabbits' 
+                 });
              }
         }
-    });
+    }
   }
 };
