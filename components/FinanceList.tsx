@@ -23,6 +23,7 @@ export const FinanceList: React.FC = () => {
   const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | undefined>(undefined);
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | undefined>(undefined);
 
   // Pagination Support
   const [txCurrentPage, setTxCurrentPage] = useState(1);
@@ -115,7 +116,10 @@ export const FinanceList: React.FC = () => {
             Record Sale
           </button>
           <button 
-            onClick={() => setIsTxnModalOpen(true)}
+            onClick={() => {
+              setSelectedTransaction(undefined);
+              setIsTxnModalOpen(true);
+            }}
             className="flex items-center gap-2 px-4 py-2 bg-farm-600 text-white rounded-lg text-sm font-medium hover:bg-farm-700 shadow-sm transition-colors"
           >
             <Plus size={16} />
@@ -240,6 +244,7 @@ export const FinanceList: React.FC = () => {
                         <th className="px-6 py-4 font-semibold text-gray-900">Category</th>
                         <th className="px-6 py-4 font-semibold text-gray-900">Description / Customer</th>
                         <th className="px-6 py-4 font-semibold text-gray-900 text-right">Amount</th>
+                        <th className="px-6 py-4 font-semibold text-gray-900 text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -272,6 +277,18 @@ export const FinanceList: React.FC = () => {
                                 txn.type === TransactionType.Income ? 'text-green-600' : 'text-red-600'
                                 }`}>
                                 {txn.type === TransactionType.Income ? '+' : '-'}{currencySymbol}{txn.amount.toFixed(2)}
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                  <button
+                                    onClick={() => {
+                                      setSelectedTransaction(txn);
+                                      setIsTxnModalOpen(true);
+                                    }}
+                                    className="p-1.5 text-gray-400 hover:text-farm-600 hover:bg-farm-50 rounded transition-colors"
+                                    title="Edit Transaction"
+                                  >
+                                    <Edit2 size={16} />
+                                  </button>
                                 </td>
                             </tr>
                           );
@@ -330,6 +347,7 @@ export const FinanceList: React.FC = () => {
                                     <th className="px-6 py-4 font-semibold text-gray-900">Contact</th>
                                     <th className="px-6 py-4 font-semibold text-gray-900">Last Purchase</th>
                                     <th className="px-6 py-4 font-semibold text-gray-900 text-right">Total Spent</th>
+                                    <th className="px-6 py-4 font-semibold text-gray-900 text-right">Total Paid</th>
                                     <th className="px-6 py-4 font-semibold text-gray-900 text-right">Actions</th>
                                 </tr>
                             </thead>
@@ -347,6 +365,9 @@ export const FinanceList: React.FC = () => {
                                         <td className="px-6 py-4">{cust.lastPurchaseDate ? cust.lastPurchaseDate.split('T')[0] : '-'}</td>
                                         <td className="px-6 py-4 text-right font-medium text-green-700">
                                             {currencySymbol}{cust.totalSpent.toLocaleString()}
+                                        </td>
+                                        <td className="px-6 py-4 text-right font-medium text-red-600">
+                                            {currencySymbol}{(cust.totalPaid || 0).toLocaleString()}
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <button 
@@ -382,8 +403,12 @@ export const FinanceList: React.FC = () => {
 
       <TransactionFormModal 
         isOpen={isTxnModalOpen}
-        onClose={() => setIsTxnModalOpen(false)}
+        onClose={() => {
+          setIsTxnModalOpen(false);
+          setSelectedTransaction(undefined);
+        }}
         onSuccess={fetchData}
+        transaction={selectedTransaction}
       />
 
       <SaleFormModal 

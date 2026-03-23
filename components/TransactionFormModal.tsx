@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { X, DollarSign, User, Search, Check } from 'lucide-react';
 import { FarmService } from '../services/farmService';
-import { TransactionType, Customer } from '../types';
+import { TransactionType, Transaction, Customer } from '../types';
 import { useAlert } from '../contexts/AlertContext';
 import { useFarm } from '../contexts/FarmContext';
 
@@ -10,9 +10,11 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  transaction?: Transaction; // If provided, modal is in edit mode
 }
 
-export const TransactionFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
+export const TransactionFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, transaction }) => {
+  const isEditMode = !!transaction;
   const { showToast } = useAlert();
   const { currencySymbol, transactionCategories } = useFarm();
   const [loading, setLoading] = useState(false);
@@ -36,23 +38,45 @@ export const TransactionFormModal: React.FC<Props> = ({ isOpen, onClose, onSucce
   // Set default category when modal opens or categories load
   React.useEffect(() => {
      if (isOpen) {
-         setFormData({
-            type: TransactionType.Expense,
-            category: transactionCategories[0] || '',
-            amount: '',
-            date: new Date().toISOString().split('T')[0],
-            notes: '',
-            customerId: undefined
-         });
+         if (transaction) {
+           // Edit mode: pre-fill with existing values
+           setFormData({
+              type: transaction.type,
+              category: transaction.category || transactionCategories[0] || '',
+              amount: transaction.amount?.toString() || '',
+              date: transaction.date ? transaction.date.split('T')[0] : new Date().toISOString().split('T')[0],
+              notes: transaction.notes || '',
+              customerId: transaction.customerId
+           });
+         } else {
+           // Create mode: reset to defaults
+           setFormData({
+              type: TransactionType.Expense,
+              category: transactionCategories[0] || '',
+              amount: '',
+              date: new Date().toISOString().split('T')[0],
+              notes: '',
+              customerId: undefined
+           });
+         }
          setSelectedCustomer(null);
          setCustomerSearch('');
          setIsNewCustomer(false);
          setCustomerContact({ phone: '', email: '' });
          
-         // Load customers
-         FarmService.getCustomers().then(setCustomers);
+         // Load customers & pre-select if editing
+         FarmService.getCustomers().then(custs => {
+           setCustomers(custs);
+           if (transaction?.customerId) {
+             const linked = custs.find(c => c.id === transaction.customerId);
+             if (linked) {
+               setSelectedCustomer(linked);
+               setCustomerSearch(linked.name);
+             }
+           }
+         });
      }
-  }, [isOpen, transactionCategories]);
+  }, [isOpen, transactionCategories, transaction]);
 
   const filteredCustomers = React.useMemo(() => 
     customers.filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase())),
@@ -82,34 +106,29 @@ export const TransactionFormModal: React.FC<Props> = ({ isOpen, onClose, onSucce
         customerId: formData.customerId
       };
 
-      if (!formData.customerId && isNewCustomer && customerSearch) {
-        payload.customer = {
-            name: customerSearch,
-            phone: customerContact.phone,
-            email: customerContact.email
-        };
+      if (isEditMode) {
+        // Update existing transaction
+        await FarmService.updateTransaction(transaction.id!, payload);
+        showToast("Transaction updated successfully", 'success');
+      } else {
+        // Create new transaction
+        if (!formData.customerId && isNewCustomer && customerSearch) {
+          payload.customer = {
+              name: customerSearch,
+              phone: customerContact.phone,
+              email: customerContact.email
+          };
+        }
+        await FarmService.addTransaction(payload);
+        showToast("Transaction saved successfully", 'success');
       }
 
-      await FarmService.addTransaction(payload);
-      showToast("Transaction saved successfully", 'success');
       onSuccess();
       onClose();
-      // Reset
-      setFormData({
-        type: TransactionType.Expense,
-        category: transactionCategories[0] || '',
-        amount: '',
-        date: new Date().toISOString().split('T')[0],
-        notes: '',
-        customerId: undefined
-      });
-      setSelectedCustomer(null);
-      setCustomerSearch('');
-      setIsNewCustomer(false);
-      setCustomerContact({ phone: '', email: '' });
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      showToast("Failed to add transaction", 'error');
+      const msg = error?.message || 'An unknown error occurred';
+      showToast(`Failed to ${isEditMode ? 'update' : 'add'} transaction: ${msg}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -122,7 +141,7 @@ export const TransactionFormModal: React.FC<Props> = ({ isOpen, onClose, onSucce
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-            <DollarSign className="text-farm-600" size={20} /> Record Transaction
+            <DollarSign className="text-farm-600" size={20} /> {isEditMode ? 'Edit Transaction' : 'Record Transaction'}
           </h3>
           <button onClick={onClose} className="p-1 text-gray-400 hover:bg-gray-100 rounded">
             <X size={20} />
@@ -331,7 +350,7 @@ export const TransactionFormModal: React.FC<Props> = ({ isOpen, onClose, onSucce
               formData.type === TransactionType.Expense ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'
             }`}
           >
-            {loading ? 'Saving...' : 'Save Transaction'}
+            {loading ? 'Saving...' : isEditMode ? 'Update Transaction' : 'Save Transaction'}
           </button>
         </form>
       </div>

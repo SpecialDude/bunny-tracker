@@ -1439,21 +1439,130 @@ export const FarmService = {
         date: new Date(data.date).toISOString() 
     });
 
-    // 3. Update Existing Customer Total
-    if (data.customerId && data.type === TransactionType.Income) {
+    // 3. Update Existing Customer Totals
+    if (data.customerId) {
         const custRef = db.collection(`farms/${farmId}/customers`).doc(data.customerId);
         const custSnap = await custRef.get();
         if (custSnap.exists) {
-            const currentTotal = custSnap.data()?.totalSpent || 0;
-            batch.update(custRef, { 
-                totalSpent: currentTotal + data.amount,
-                lastPurchaseDate: new Date(data.date).toISOString()
-            });
+            const currentTotalSpent = custSnap.data()?.totalSpent || 0;
+            const currentTotalPaid = custSnap.data()?.totalPaid || 0;
+            
+            if (data.type === TransactionType.Income) {
+                batch.update(custRef, { 
+                    totalSpent: currentTotalSpent + data.amount,
+                    lastPurchaseDate: new Date(data.date).toISOString()
+                });
+            } else if (data.type === TransactionType.Expense) {
+                batch.update(custRef, { 
+                    totalPaid: currentTotalPaid + data.amount
+                });
+            }
         }
     }
 
     await batch.commit();
   },
+
+  async updateTransaction(id: string, updates: Partial<Transaction>): Promise<void> {
+    if (isDemoMode()) {
+        const idx = MOCK_STORE.transactions.findIndex((t: any) => t.id === id);
+        if (idx !== -1) {
+            const oldTxn = MOCK_STORE.transactions[idx];
+            // Reconcile customer totalSpent/totalPaid in mock
+            if (oldTxn.customerId) {
+                const oldCust = MOCK_STORE.customers.find((c: any) => c.id === oldTxn.customerId);
+                if (oldCust) {
+                    if (oldTxn.type === TransactionType.Income) oldCust.totalSpent = Math.max(0, oldCust.totalSpent - oldTxn.amount);
+                    if (oldTxn.type === TransactionType.Expense) oldCust.totalPaid = Math.max(0, (oldCust.totalPaid || 0) - oldTxn.amount);
+                }
+            }
+            MOCK_STORE.transactions[idx] = { ...oldTxn, ...updates };
+            const newTxn = MOCK_STORE.transactions[idx];
+            if (newTxn.customerId) {
+                const newCust = MOCK_STORE.customers.find((c: any) => c.id === newTxn.customerId);
+                if (newCust) {
+                    if (newTxn.type === TransactionType.Income) newCust.totalSpent += newTxn.amount;
+                    if (newTxn.type === TransactionType.Expense) newCust.totalPaid = (newCust.totalPaid || 0) + newTxn.amount;
+                }
+            }
+        }
+        return;
+    }
+    if (!db) throw new Error("DB not initialized");
+
+    const farmId = getFarmId();
+    const batch = db.batch();
+
+    const txnRef = db.collection(`farms/${farmId}/transactions`).doc(id);
+    const txnSnap = await txnRef.get();
+    if (!txnSnap.exists) throw new Error("Transaction not found");
+    const oldTxn = txnSnap.data() as Transaction;
+
+    // Merge updates
+    const newTxn = { ...oldTxn, ...updates };
+
+    // 1. Update the transaction document — strip undefined values (Firestore rejects them)
+    const updatePayload: any = {
+      ...updates,
+      customerId: updates.customerId !== undefined ? updates.customerId : (oldTxn.customerId || null),
+      updatedAt: new Date()
+    };
+    if (updates.date) {
+      updatePayload.date = new Date(updates.date).toISOString();
+    }
+    // Remove any remaining undefined fields
+    Object.keys(updatePayload).forEach(key => {
+      if (updatePayload[key] === undefined) delete updatePayload[key];
+    });
+    batch.update(txnRef, updatePayload);
+
+    // 2. Reconcile customer totals
+    const oldIsIncome = oldTxn.type === TransactionType.Income;
+    const oldIsExpense = oldTxn.type === TransactionType.Expense;
+    const newIsIncome = newTxn.type === TransactionType.Income;
+    const newIsExpense = newTxn.type === TransactionType.Expense;
+    const oldCustomerId = oldTxn.customerId;
+    const newCustomerId = newTxn.customerId;
+
+    // Subtract old contribution from old customer
+    if (oldCustomerId) {
+      const custRef = db.collection(`farms/${farmId}/customers`).doc(oldCustomerId);
+      const custSnap = await custRef.get();
+      if (custSnap.exists) {
+        if (oldIsIncome) {
+          const currentTotalSpent = custSnap.data()?.totalSpent || 0;
+          batch.update(custRef, { totalSpent: Math.max(0, currentTotalSpent - oldTxn.amount) });
+        } else if (oldIsExpense) {
+          const currentTotalPaid = custSnap.data()?.totalPaid || 0;
+          batch.update(custRef, { totalPaid: Math.max(0, currentTotalPaid - oldTxn.amount) });
+        }
+      }
+    }
+
+    // Add new contribution to new customer
+    if (newCustomerId) {
+      const custRef = db.collection(`farms/${farmId}/customers`).doc(newCustomerId);
+      const custSnap = await custRef.get();
+      if (custSnap.exists) {
+        if (newIsIncome) {
+          const currentTotalSpent = custSnap.data()?.totalSpent || 0;
+          const adjusted = (oldCustomerId === newCustomerId && oldIsIncome)
+            ? Math.max(0, currentTotalSpent - oldTxn.amount) + newTxn.amount
+            : currentTotalSpent + newTxn.amount;
+          batch.update(custRef, { totalSpent: Math.max(0, adjusted) });
+        } else if (newIsExpense) {
+          const currentTotalPaid = custSnap.data()?.totalPaid || 0;
+          const adjusted = (oldCustomerId === newCustomerId && oldIsExpense)
+            ? Math.max(0, currentTotalPaid - oldTxn.amount) + newTxn.amount
+            : currentTotalPaid + newTxn.amount;
+          batch.update(custRef, { totalPaid: Math.max(0, adjusted) });
+        }
+      }
+    }
+
+    await batch.commit();
+  },
+
 
   async recordSale(data: Omit<Sale, 'id' | 'farmId' | 'saleId'> & { customer?: Omit<Customer, 'id' | 'farmId' | 'totalSpent'> }): Promise<void> {
     if (isDemoMode()) {

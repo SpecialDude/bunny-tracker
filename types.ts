@@ -175,6 +175,7 @@ export interface Customer {
   phone?: string;
   email?: string;
   totalSpent: number;
+  totalPaid?: number;
   lastPurchaseDate?: string;
   notes?: string;
   farmId: string;
