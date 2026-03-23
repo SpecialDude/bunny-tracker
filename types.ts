@@ -165,7 +165,7 @@ export interface Transaction {
   amount: number;
   date: string;
   relatedId?: string; // ID of sold rabbit or medication
-  customerId?: string;
+  customerId?: string | null;
   notes: string;
   farmId: string;
 }

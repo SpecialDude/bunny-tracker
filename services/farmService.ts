@@ -98,6 +98,15 @@ const convertDoc = (doc: any): any => {
 };
 
 export const FarmService = {
+  // Helper to ensure payloads don't contain undefined fields (which Firestore rejects)
+  cleanPayload(data: any): any {
+    const cleaned = { ...data };
+    Object.keys(cleaned).forEach(key => {
+      if (cleaned[key] === undefined) delete cleaned[key];
+    });
+    return cleaned;
+  },
+
   // --- User & Onboarding ---
 
   async syncUser(user: any): Promise<void> {
@@ -112,7 +121,7 @@ export const FarmService = {
         photoURL: user.photoURL,
         lastLogin: new Date().toISOString()
       };
-      await userRef.set(payload, { merge: true });
+      await userRef.set(this.cleanPayload(payload), { merge: true });
     } catch (e) {
       console.error("Failed to sync user profile:", e);
     }
@@ -216,12 +225,12 @@ export const FarmService = {
     if (isDemoMode()) return;
     if (!db) throw new Error("DB not initialized");
     const farmId = getFarmId();
-    await db.collection('farms').doc(farmId).set({
+    await db.collection('farms').doc(farmId).set(this.cleanPayload({
       ...settings,
       farmId: farmId, // Ensure ID is set
       ownerUid: getUserId(), // Ensure ownership
       updatedAt: new Date()
-    }, { merge: true });
+    }), { merge: true });
   },
 
   async resetFarmAccount(): Promise<void> {
@@ -517,11 +526,11 @@ export const FarmService = {
         dateOfAcquisition: rabbitData.dateOfAcquisition ? new Date(rabbitData.dateOfAcquisition) : timestamp,
       };
 
-      batch.set(newRabbitRef, docData);
+      batch.set(newRabbitRef, this.cleanPayload(docData));
 
       if (rabbitData.weight && rabbitData.weight > 0) {
         const weightRef = db.collection(`farms/${farmId}/weights`).doc();
-        batch.set(weightRef, {
+        batch.set(weightRef, this.cleanPayload({
             id: weightRef.id,
             rabbitId: finalTag,
             weight: rabbitData.weight,
@@ -531,12 +540,12 @@ export const FarmService = {
             notes: 'Initial weight on entry',
             farmId: farmId,
             ownerUid: userId
-        });
+        }));
       }
 
       if (isPurchase && i === 0 && rabbitData.purchaseCost && rabbitData.purchaseCost > 0) {
         const txnRef = db.collection(`farms/${farmId}/transactions`).doc();
-        batch.set(txnRef, {
+        batch.set(txnRef, this.cleanPayload({
           id: txnRef.id,
           farmId: farmId,
           ownerUid: userId,
@@ -546,7 +555,7 @@ export const FarmService = {
           date: new Date().toISOString(),
           relatedId: newRabbitRef.id,
           notes: `Purchase of ${kitCount} rabbit(s). Tag start: ${rabbitData.tag}`
-        });
+        }));
       }
       
       if (rabbitData.currentHutchId) {
@@ -641,7 +650,7 @@ export const FarmService = {
               dateOfAcquisition: baseData.dateOfAcquisition ? new Date(baseData.dateOfAcquisition) : timestamp,
           };
   
-          batch.set(newRabbitRef, docData);
+          batch.set(newRabbitRef, this.cleanPayload(docData));
   
           if (kit.hutchId) {
              const hutchSnapshot = await db.collection(`farms/${farmId}/hutches`)
@@ -736,7 +745,7 @@ export const FarmService = {
         batch.update(newHutchDoc.ref, { currentOccupancy: (hutchData.currentOccupancy || 0) + 1 });
 
         const newOccRef = db.collection(`farms/${farmId}/hutchOccupancy`).doc();
-        batch.set(newOccRef, {
+        batch.set(newOccRef, this.cleanPayload({
             id: newOccRef.id,
             rabbitId: rabbitId,
             hutchId: targetHutchId,
@@ -748,7 +757,7 @@ export const FarmService = {
             farmId: farmId,
             ownerUid: userId,
             createdAt: timestamp
-        });
+        }));
     }
 
     batch.update(rabbitRef, { currentHutchId: targetHutchId, updatedAt: timestamp });
@@ -785,10 +794,10 @@ export const FarmService = {
     const oldRabbit = rabbitSnap.data() as Rabbit;
 
     const batch = db.batch();
-    batch.update(rabbitRef, {
+    batch.update(rabbitRef, this.cleanPayload({
       ...safeUpdates,
       updatedAt: new Date()
-    });
+    }));
 
     // Name propagation logic: If name changed, update all historical mating records
     if (updates.name !== undefined && updates.name !== oldRabbit.name) {
@@ -798,8 +807,8 @@ export const FarmService = {
             db.collection(`farms/${farmId}/crossings`).where('sireId', '==', oldRabbit.tag).get()
         ]);
         
-        doeCrossings.forEach(doc => batch.update(doc.ref, { doeName: updates.name }));
-        sireCrossings.forEach(doc => batch.update(doc.ref, { sireName: updates.name }));
+        doeCrossings.forEach(doc => batch.update(doc.ref, this.cleanPayload({ doeName: updates.name })));
+        sireCrossings.forEach(doc => batch.update(doc.ref, this.cleanPayload({ sireName: updates.name })));
     }
 
     await batch.commit();
@@ -900,7 +909,7 @@ export const FarmService = {
         
         // Start new occupancy
         const newOccRef = db.collection(`farms/${farmId}/hutchOccupancy`).doc();
-        batch.set(newOccRef, {
+        batch.set(newOccRef, this.cleanPayload({
             id: newOccRef.id,
             rabbitId: rabbit.id,
             hutchId: targetHutchId,
@@ -912,7 +921,7 @@ export const FarmService = {
             farmId: farmId,
             ownerUid: userId,
             createdAt: timestamp
-        });
+        }));
         
         // Update rabbit doc
         batch.update(rabbit.ref, { currentHutchId: targetHutchId, updatedAt: timestamp });
@@ -949,12 +958,12 @@ export const FarmService = {
     if (!rabbitDoc.exists) throw new Error("Rabbit not found");
     const rabbitData = rabbitDoc.data() as Rabbit;
 
-    batch.update(rabbitRef, {
+    batch.update(rabbitRef, this.cleanPayload({
        status: status,
        currentHutchId: null,
        notes: (rabbitData.notes || '') + `\n[${status} on ${date}]: ${notes}`,
        updatedAt: timestamp
-    });
+    }));
 
     if (rabbitData.currentHutchId) {
        const hutchSnapshot = await db.collection(`farms/${farmId}/hutches`)
@@ -970,7 +979,7 @@ export const FarmService = {
 
     if (status === RabbitStatus.Slaughtered && soldAmount && soldAmount > 0) {
        const txnRef = db.collection(`farms/${farmId}/transactions`).doc();
-       batch.set(txnRef, {
+       batch.set(txnRef, this.cleanPayload({
          id: txnRef.id,
          farmId: farmId,
          ownerUid: userId,
@@ -980,7 +989,7 @@ export const FarmService = {
          date: new Date(date).toISOString(),
          relatedId: rabbitId,
          notes: `Meat sale for rabbit ${rabbitData.tag}`
-       });
+       }));
     }
 
     await batch.commit();
@@ -1030,7 +1039,7 @@ export const FarmService = {
     const docRef = db.collection(`farms/${farmId}/hutches`).doc();
     const hutchId = `H${data.number.toString().padStart(2, '0')}`;
     
-    await docRef.set({
+    await docRef.set(this.cleanPayload({
       ...data,
       id: docRef.id,
       hutchId: hutchId,
@@ -1039,7 +1048,7 @@ export const FarmService = {
       ownerUid: userId,
       createdAt: new Date(),
       updatedAt: new Date()
-    });
+    }));
   },
 
   async syncHutchOccupancy(hutchId: string, actualCount: number): Promise<void> {
@@ -1062,10 +1071,10 @@ export const FarmService = {
     if (isDemoMode()) return;
     if (!db) throw new Error("DB not initialized");
     const farmId = getFarmId();
-    await db.collection(`farms/${farmId}/hutches`).doc(id).update({
+    await db.collection(`farms/${farmId}/hutches`).doc(id).update(this.cleanPayload({
       ...updates,
       updatedAt: new Date()
-    });
+    }));
   },
 
   async deleteHutch(id: string): Promise<void> {
@@ -1121,7 +1130,7 @@ export const FarmService = {
     deliveryDate.setDate(deliveryDate.getDate() + settings.defaultGestationDays);
 
     const docRef = db.collection(`farms/${farmId}/crossings`).doc();
-    await docRef.set({
+    const crossingPayload: any = {
       ...data,
       id: docRef.id,
       status: CrossingStatus.Pending,
@@ -1131,7 +1140,9 @@ export const FarmService = {
       ownerUid: userId,
       createdAt: new Date(),
       updatedAt: new Date()
-    });
+    };
+
+    await docRef.set(this.cleanPayload(crossingPayload));
 
     // Mating moves are temporary visits — always override capacity so they aren't blocked
     if (moveConfig && moveConfig.targetHutchId) {
@@ -1221,7 +1232,7 @@ export const FarmService = {
 
       if (hasUpdate) {
         const ref = db.collection(`farms/${farmId}/crossings`).doc(c.id!);
-        batch.update(ref, { ...updates, updatedAt: new Date() });
+        batch.update(ref, this.cleanPayload({ ...updates, updatedAt: new Date() }));
         updatedCount++;
       }
     }
@@ -1249,7 +1260,7 @@ export const FarmService = {
     const crossing = crossingSnap.data() as Crossing;
 
     const batch = db.batch();
-    batch.update(crossingRef, updateData);
+    batch.update(crossingRef, this.cleanPayload(updateData));
 
     if (status === CrossingStatus.Pregnant && crossing.doeId) {
        const rabbits = await db.collection(`farms/${farmId}/rabbits`).where('tag', '==', crossing.doeId).get();
@@ -1276,10 +1287,10 @@ export const FarmService = {
     const timestamp = new Date();
 
     const deliveryRef = db.collection(`farms/${farmId}/deliveries`).doc();
-    batch.set(deliveryRef, { ...data, id: deliveryRef.id, farmId, ownerUid: userId, createdAt: timestamp });
+    batch.set(deliveryRef, this.cleanPayload({ ...data, id: deliveryRef.id, farmId, ownerUid: userId, createdAt: timestamp }));
 
     const crossingRef = db.collection(`farms/${farmId}/crossings`).doc(data.crossingId);
-    batch.update(crossingRef, { status: CrossingStatus.Delivered, actualDeliveryDate: data.dateOfDelivery, kitsBorn: data.kitsBorn, kitsLive: data.kitsLive, updatedAt: timestamp });
+    batch.update(crossingRef, this.cleanPayload({ status: CrossingStatus.Delivered, actualDeliveryDate: data.dateOfDelivery, kitsBorn: data.kitsBorn, kitsLive: data.kitsLive, updatedAt: timestamp }));
 
     const doeSnapshot = await db.collection(`farms/${farmId}/rabbits`).where('tag', '==', data.doeId).get();
     if (!doeSnapshot.empty) batch.update(doeSnapshot.docs[0].ref, { status: RabbitStatus.Alive });
@@ -1294,7 +1305,7 @@ export const FarmService = {
       const batch = db.batch();
       
       const delRef = db.collection(`farms/${farmId}/deliveries`).doc(deliveryId);
-      batch.update(delRef, updates);
+      batch.update(delRef, this.cleanPayload(updates));
 
       if (updates.kitsBorn !== undefined || updates.kitsLive !== undefined || updates.dateOfDelivery !== undefined) {
           const crossRef = db.collection(`farms/${farmId}/crossings`).doc(crossingId);
@@ -1302,7 +1313,7 @@ export const FarmService = {
           if (updates.kitsBorn !== undefined) crossUpdate.kitsBorn = updates.kitsBorn;
           if (updates.kitsLive !== undefined) crossUpdate.kitsLive = updates.kitsLive;
           if (updates.dateOfDelivery !== undefined) crossUpdate.actualDeliveryDate = updates.dateOfDelivery;
-          batch.update(crossRef, crossUpdate);
+          batch.update(crossRef, this.cleanPayload(crossUpdate));
       }
       await batch.commit();
   },
@@ -1336,14 +1347,14 @@ export const FarmService = {
     const userId = getUserId();
     const farmId = getFarmId();
     const docRef = db.collection(`farms/${farmId}/customers`).doc();
-    await docRef.set({
+    await docRef.set(this.cleanPayload({
        ...data,
        id: docRef.id,
        totalSpent: 0,
        farmId,
        ownerUid: userId,
        createdAt: new Date()
-    });
+    }));
     return docRef.id;
   },
 
@@ -1357,10 +1368,10 @@ export const FarmService = {
     }
     if (!db) throw new Error("DB not initialized");
     const farmId = getFarmId();
-    await db.collection(`farms/${farmId}/customers`).doc(id).update({
+    await db.collection(`farms/${farmId}/customers`).doc(id).update(this.cleanPayload({
        ...data,
        updatedAt: new Date()
-    });
+    }));
   },
 
   // --- Finances (Sales & Transactions) ---
@@ -1416,7 +1427,8 @@ export const FarmService = {
     if (!customerId && data.customer) {
         const custRef = db.collection(`farms/${farmId}/customers`).doc();
         customerId = custRef.id;
-        batch.set(custRef, {
+        
+        const customerPayload: any = {
             ...data.customer,
             id: customerId,
             farmId,
@@ -1424,20 +1436,24 @@ export const FarmService = {
             totalSpent: data.type === TransactionType.Income ? data.amount : 0,
             lastPurchaseDate: data.type === TransactionType.Income ? new Date(data.date).toISOString() : null,
             createdAt: new Date()
-        });
+        };
+
+        batch.set(custRef, this.cleanPayload(customerPayload));
     }
 
     // 2. Add Transaction
     const docRef = db.collection(`farms/${farmId}/transactions`).doc();
-    batch.set(docRef, { 
+    const transactionPayload: any = { 
         ...data, 
         id: docRef.id, 
         farmId, 
         ownerUid: userId, 
-        customerId: customerId || undefined,
+        customerId: customerId || null,
         createdAt: new Date(), 
         date: new Date(data.date).toISOString() 
-    });
+    };
+
+    batch.set(docRef, this.cleanPayload(transactionPayload));
 
     // 3. Update Existing Customer Totals
     if (data.customerId) {
@@ -1448,14 +1464,14 @@ export const FarmService = {
             const currentTotalPaid = custSnap.data()?.totalPaid || 0;
             
             if (data.type === TransactionType.Income) {
-                batch.update(custRef, { 
+                batch.update(custRef, this.cleanPayload({ 
                     totalSpent: currentTotalSpent + data.amount,
                     lastPurchaseDate: new Date(data.date).toISOString()
-                });
+                }));
             } else if (data.type === TransactionType.Expense) {
-                batch.update(custRef, { 
+                batch.update(custRef, this.cleanPayload({ 
                     totalPaid: currentTotalPaid + data.amount
-                });
+                }));
             }
         }
     }
@@ -1501,7 +1517,7 @@ export const FarmService = {
     // Merge updates
     const newTxn = { ...oldTxn, ...updates };
 
-    // 1. Update the transaction document — strip undefined values (Firestore rejects them)
+    // 1. Update the transaction document
     const updatePayload: any = {
       ...updates,
       customerId: updates.customerId !== undefined ? updates.customerId : (oldTxn.customerId || null),
@@ -1510,11 +1526,7 @@ export const FarmService = {
     if (updates.date) {
       updatePayload.date = new Date(updates.date).toISOString();
     }
-    // Remove any remaining undefined fields
-    Object.keys(updatePayload).forEach(key => {
-      if (updatePayload[key] === undefined) delete updatePayload[key];
-    });
-    batch.update(txnRef, updatePayload);
+    batch.update(txnRef, this.cleanPayload(updatePayload));
 
     // 2. Reconcile customer totals
     const oldIsIncome = oldTxn.type === TransactionType.Income;
@@ -1592,16 +1604,16 @@ export const FarmService = {
         const custSnap = await custRef.get();
         if (custSnap.exists) {
             const currentTotal = custSnap.data()?.totalSpent || 0;
-            batch.update(custRef, { 
+            batch.update(custRef, this.cleanPayload({ 
                 totalSpent: currentTotal + data.amount,
                 lastPurchaseDate: new Date(data.date).toISOString()
-            });
+            }));
         }
     } else if (data.customer) {
         // Create New Customer
         const custRef = db.collection(`farms/${farmId}/customers`).doc();
         customerId = custRef.id;
-        batch.set(custRef, {
+        batch.set(custRef, this.cleanPayload({
             ...data.customer,
             id: custRef.id,
             totalSpent: data.amount,
@@ -1609,14 +1621,14 @@ export const FarmService = {
             farmId,
             ownerUid: userId,
             createdAt: timestamp
-        });
+        }));
     }
 
     // 2. Create Sale Record
     const saleRef = db.collection(`farms/${farmId}/sales`).doc();
     const saleId = `S-${Math.floor(Date.now() / 1000).toString().substring(4)}`; 
     
-    batch.set(saleRef, {
+    batch.set(saleRef, this.cleanPayload({
       ...data,
       id: saleRef.id,
       saleId: saleId,
@@ -1627,11 +1639,11 @@ export const FarmService = {
       ownerUid: userId,
       createdAt: timestamp,
       date: new Date(data.date).toISOString()
-    });
+    }));
 
     // 3. Create Transaction
     const txnRef = db.collection(`farms/${farmId}/transactions`).doc();
-    batch.set(txnRef, {
+    batch.set(txnRef, this.cleanPayload({
       id: txnRef.id,
       farmId,
       ownerUid: userId,
@@ -1640,9 +1652,9 @@ export const FarmService = {
       amount: data.amount,
       date: new Date(data.date).toISOString(),
       relatedId: saleRef.id,
-      customerId: customerId || undefined,
+      customerId: customerId || null,
       notes: `Sale of ${data.rabbitIds.length} rabbit(s) to ${data.buyerName}.`
-    });
+    }));
 
     // 4. Update Rabbits (Mark Sold, Free Hutch)
     for (const rId of data.rabbitIds) {
@@ -1660,7 +1672,7 @@ export const FarmService = {
              occSnap.forEach(doc => { batch.update(doc.ref, { endAt: timestamp }); });
           }
       }
-      batch.update(rabbitRef, { status: RabbitStatus.Sold, currentHutchId: null, updatedAt: timestamp });
+      batch.update(rabbitRef, this.cleanPayload({ status: RabbitStatus.Sold, currentHutchId: null, updatedAt: timestamp }));
     }
 
     await batch.commit();
@@ -1700,7 +1712,7 @@ export const FarmService = {
      const timestamp = new Date();
 
      const medRef = db.collection(`farms/${farmId}/medical`).doc();
-     batch.set(medRef, {
+     const medicalPayload: any = {
        ...data,
        id: medRef.id,
        farmId,
@@ -1708,11 +1720,13 @@ export const FarmService = {
        createdAt: timestamp,
        date: new Date(data.date).toISOString(),
        nextDueDate: data.nextDueDate ? new Date(data.nextDueDate).toISOString() : null
-     });
+     };
+
+     batch.set(medRef, this.cleanPayload(medicalPayload));
 
      if (data.cost && data.cost > 0) {
         const txnRef = db.collection(`farms/${farmId}/transactions`).doc();
-        batch.set(txnRef, {
+        const transactionPayload: any = {
           id: txnRef.id,
           farmId,
           ownerUid: userId,
@@ -1722,7 +1736,9 @@ export const FarmService = {
           date: new Date(data.date).toISOString(),
           relatedId: medRef.id,
           notes: `${data.type}: ${data.medicationName} for rabbit ${data.rabbitId}`
-        });
+        };
+
+        batch.set(txnRef, this.cleanPayload(transactionPayload));
      }
      await batch.commit();
   },
@@ -1741,9 +1757,9 @@ export const FarmService = {
       if (!db) throw new Error("DB not initialized");
       const batch = db.batch();
       const weightRef = db.collection(`farms/${farmId}/weights`).doc();
-      batch.set(weightRef, { id: weightRef.id, rabbitId, weight, unit: 'kg', date: new Date(date).toISOString(), ageAtRecord, notes: notes || '', farmId, ownerUid: userId });
+      batch.set(weightRef, this.cleanPayload({ id: weightRef.id, rabbitId, weight, unit: 'kg', date: new Date(date).toISOString(), ageAtRecord, notes: notes || '', farmId, ownerUid: userId }));
       const rabbitQuery = await db.collection(`farms/${farmId}/rabbits`).where('tag', '==', rabbitId).get();
-      if (!rabbitQuery.empty) batch.update(rabbitQuery.docs[0].ref, { weight: weight, updatedAt: new Date() });
+      if (!rabbitQuery.empty) batch.update(rabbitQuery.docs[0].ref, this.cleanPayload({ weight: weight, updatedAt: new Date() }));
       await batch.commit();
   },
 
@@ -1765,7 +1781,7 @@ export const FarmService = {
     }
     if (!db) throw new Error("DB not initialized");
     const farmId = getFarmId();
-    await db.collection(`farms/${farmId}/notifications`).doc(id).update({ read: true });
+    await db.collection(`farms/${farmId}/notifications`).doc(id).update(this.cleanPayload({ read: true }));
   },
 
   async markAllNotificationsRead(): Promise<void> {
@@ -1777,7 +1793,7 @@ export const FarmService = {
     const farmId = getFarmId();
     const snapshot = await db.collection(`farms/${farmId}/notifications`).where('read', '==', false).get();
     const batch = db.batch();
-    snapshot.docs.forEach(doc => { batch.update(doc.ref, { read: true }); });
+    snapshot.docs.forEach(doc => { batch.update(doc.ref, this.cleanPayload({ read: true })); });
     await batch.commit();
   },
 
@@ -1795,7 +1811,7 @@ export const FarmService = {
         if (!db) return;
         const q = await db.collection(`farms/${farmId}/notifications`).where('title', '==', data.title).where('date', '>=', todayStr).get();
         if (q.empty) {
-            await db.collection(`farms/${farmId}/notifications`).add({ ...data, farmId, ownerUid: userId, createdAt: new Date(), read: false });
+            await db.collection(`farms/${farmId}/notifications`).add(this.cleanPayload({ ...data, farmId, ownerUid: userId, createdAt: new Date(), read: false }));
         }
     };
 

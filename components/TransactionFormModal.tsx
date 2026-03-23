@@ -24,7 +24,7 @@ export const TransactionFormModal: React.FC<Props> = ({ isOpen, onClose, onSucce
     amount: '',
     date: new Date().toISOString().split('T')[0],
     notes: '',
-    customerId: undefined as string | undefined
+    customerId: null as string | null | undefined
   });
 
   // Customer selection state
@@ -56,7 +56,7 @@ export const TransactionFormModal: React.FC<Props> = ({ isOpen, onClose, onSucce
               amount: '',
               date: new Date().toISOString().split('T')[0],
               notes: '',
-              customerId: undefined
+              customerId: null
            });
          }
          setSelectedCustomer(null);
@@ -226,7 +226,7 @@ export const TransactionFormModal: React.FC<Props> = ({ isOpen, onClose, onSucce
                         type="button" 
                         onClick={() => {
                             setSelectedCustomer(null);
-                            setFormData(prev => ({ ...prev, customerId: undefined }));
+                            setFormData(prev => ({ ...prev, customerId: null }));
                             setCustomerSearch('');
                             setIsNewCustomer(false);
                         }}
