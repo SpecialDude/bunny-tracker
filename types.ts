@@ -58,6 +58,7 @@ export interface Farm {
   defaultGestationDays: number;
   defaultWeaningDays: number;
   defaultPalpationDays: number;
+  notificationLeadDays?: number; // Days before event to start notifying
   breeds: Breed[];
   transactionCategories: string[];
   createdAt: any;

@@ -1799,20 +1799,26 @@ export const FarmService = {
         }
     };
 
+    const farmSettings = await this.getFarmSettings();
+    const leadDays = farmSettings?.notificationLeadDays ?? 3;
+    const weaningAge = farmSettings?.defaultWeaningDays ?? 35;
+
     const crossings = await this.getCrossings();
     crossings.forEach(c => {
         if (c.status === CrossingStatus.Pregnant) {
             const deliveryDate = new Date(c.expectedDeliveryDate);
             const diffTime = deliveryDate.getTime() - now.getTime();
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-            if (diffDays <= 3 && diffDays >= 0) {
+            if (diffDays <= leadDays && diffDays >= 0) {
                 addNotify({ type: 'Urgent', title: `Delivery Due: ${c.doeId}`, message: `Doe ${c.doeId} is expected to deliver in ${diffDays} day(s).`, date: todayStr, read: false, linkTo: 'breeding' });
             }
         }
         if (c.status === CrossingStatus.Pending) {
              const palpDate = new Date(c.expectedPalpationDate);
-             if (palpDate <= now) {
-                 addNotify({ type: 'Info', title: `Palpation Check: ${c.doeId}`, message: `Check pregnancy for mating with ${c.sireId}.`, date: todayStr, read: false, linkTo: 'breeding' });
+             const diffTime = palpDate.getTime() - now.getTime();
+             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+             if (diffDays <= leadDays && diffDays >= 0) {
+                 addNotify({ type: 'Info', title: `Palpation Check: ${c.doeId}`, message: `Check pregnancy for mating with ${c.sireId} in ${diffDays} day(s).`, date: todayStr, read: false, linkTo: 'breeding' });
              }
         }
     });
@@ -1822,8 +1828,9 @@ export const FarmService = {
         if (r.dateOfBirth && r.status === RabbitStatus.Alive) {
              const dob = new Date(r.dateOfBirth);
              const ageDays = Math.floor((now.getTime() - dob.getTime()) / (1000 * 60 * 60 * 24));
-             if (ageDays === 35) {
-                 addNotify({ type: 'Warning', title: `Weaning Due: ${r.tag}`, message: `Rabbit ${r.tag} is 35 days old. Ready for weaning.`, date: todayStr, read: false, linkTo: 'rabbits' });
+             const daysToWeaning = weaningAge - ageDays;
+             if (daysToWeaning <= leadDays && daysToWeaning >= 0) {
+                 addNotify({ type: 'Warning', title: `Weaning Due: ${r.tag}`, message: `Rabbit ${r.tag} is ready for weaning in ${daysToWeaning} day(s).`, date: todayStr, read: false, linkTo: 'rabbits' });
              }
         }
     });

@@ -586,6 +586,18 @@ export const Settings: React.FC = () => {
                   />
                   <p className="text-xs text-gray-500 mt-1">Age when kits are separated.</p>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Alert Lead Time (Days)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="14"
+                    value={farmSettings.notificationLeadDays ?? 3}
+                    onChange={(e) => setFarmSettings({ ...farmSettings, notificationLeadDays: parseInt(e.target.value) })}
+                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Days before an event to start showing alerts.</p>
+                </div>
               </div>
               <div className="flex justify-end">
                 <button
