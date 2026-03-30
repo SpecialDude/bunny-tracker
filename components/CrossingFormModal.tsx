@@ -27,7 +27,7 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
     notes: ''
   });
 
-  const [locationType, setLocationType] = useState<MatingLocation>('neutral');
+  const [locationType, setLocationType] = useState<MatingLocation | null>(null);
   const [neutralHutchId, setNeutralHutchId] = useState('');
 
   useEffect(() => {
@@ -36,7 +36,7 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
       FarmService.getRabbitsBySex(Sex.Male).then(setBucks);
       FarmService.getHutches().then(setHutches);
       setFormData(prev => ({ ...prev, doeId: '', sireId: '' }));
-      setLocationType('neutral');
+      setLocationType(null);
       setNeutralHutchId('');
     }
   }, [isOpen]);
@@ -75,8 +75,9 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
     return null;
   }, [selectedDoe, selectedSire]);
 
-  // Resolve the actual target hutch ID based on selection
-  const getTargetHutchId = (): string => {
+  // Resolve the mating hutch ID (for record-keeping only, no movement)
+  const getMatingHutchId = (): string => {
+    if (!locationType) return '';
     if (locationType === 'doe_hutch') return selectedDoe?.currentHutchId || '';
     if (locationType === 'sire_hutch') return selectedSire?.currentHutchId || '';
     return neutralHutchId;
@@ -86,38 +87,24 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
     e.preventDefault();
     if (!formData.doeId || !formData.sireId) return;
 
-    const targetId = getTargetHutchId();
-    if (!targetId) {
-        showToast("Please specify a valid hutch for mating.", 'error');
+    const matingHutchId = getMatingHutchId();
+    if (!matingHutchId) {
+        showToast("Please specify where the mating took place.", 'error');
         return;
     }
 
     setLoading(true);
     try {
-      // Determine movement config
-      let moveConfig: any = { targetHutchId: targetId, doeDbId: selectedDoe?.id, sireDbId: selectedSire?.id };
-      
-      if (locationType === 'doe_hutch') {
-         // Sire moves to Doe
-         moveConfig.mode = 'sire_visit_doe';
-      } else if (locationType === 'sire_hutch') {
-         // Doe moves to Sire
-         moveConfig.mode = 'doe_visit_sire';
-      } else {
-         // Both move to neutral
-         moveConfig.mode = 'neutral';
-      }
-
       await FarmService.addCrossing({
         ...formData,
         doeName: selectedDoe?.name,
         sireName: selectedSire?.name,
         doeHutchLabel: selectedDoe?.currentHutchId ? hutchMap[selectedDoe.currentHutchId] : undefined,
         sireHutchLabel: selectedSire?.currentHutchId ? hutchMap[selectedSire.currentHutchId] : undefined,
-        matingHutchId: targetId
-      }, moveConfig);
+        matingHutchId: matingHutchId
+      });
 
-      showToast("Mating recorded & rabbits moved successfully", 'success');
+      showToast("Mating record saved successfully", 'success');
       onSuccess();
       onClose();
     } catch (error: any) {
@@ -152,8 +139,7 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
                 value={formData.doeId}
                 onChange={e => {
                     setFormData({...formData, doeId: e.target.value});
-                    // Reset location if current selection becomes invalid
-                    setLocationType('neutral');
+                    setLocationType(null);
                 }}
                 className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none text-sm"
                 >
@@ -167,7 +153,7 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
                 </select>
                 {selectedDoe?.currentHutchId && (
                     <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                        <Warehouse size={10} /> Currently in: {selectedDoe.currentHutchId}
+                        <Warehouse size={10} /> Currently in: {hutchMap[selectedDoe.currentHutchId] || selectedDoe.currentHutchId}
                     </p>
                 )}
             </div>
@@ -179,7 +165,7 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
                 value={formData.sireId}
                 onChange={e => {
                     setFormData({...formData, sireId: e.target.value});
-                    setLocationType('neutral');
+                    setLocationType(null);
                 }}
                 className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none text-sm"
                 >
@@ -193,7 +179,7 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
                 </select>
                 {selectedSire?.currentHutchId && (
                     <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                        <Warehouse size={10} /> Currently in: {selectedSire.currentHutchId}
+                        <Warehouse size={10} /> Currently in: {hutchMap[selectedSire.currentHutchId] || selectedSire.currentHutchId}
                     </p>
                 )}
             </div>
@@ -213,7 +199,8 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Mating Location (Rabbit Movement)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Where did mating happen?</label>
+            <p className="text-xs text-gray-500 mb-2">This is for record-keeping only — rabbits will not be moved from their hutches.</p>
             <div className="space-y-2">
                 {/* Option 1: Doe's Hutch */}
                 <label className={`flex items-center p-3 border rounded-lg cursor-pointer transition-colors ${
@@ -229,10 +216,10 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
                         disabled={!selectedDoe?.currentHutchId}
                     />
                     <div className="ml-3">
-                        <span className="block text-sm font-medium text-gray-900">In Doe's Hutch</span>
+                        <span className="block text-sm font-medium text-gray-900">Doe's Hutch</span>
                         <span className="block text-xs text-gray-500">
                              {selectedDoe?.currentHutchId 
-                               ? `Buck moves to ${selectedDoe.currentHutchId}` 
+                               ? `${hutchMap[selectedDoe.currentHutchId] || selectedDoe.currentHutchId}` 
                                : "Doe has no hutch assigned"}
                         </span>
                     </div>
@@ -252,10 +239,10 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
                         disabled={!selectedSire?.currentHutchId}
                     />
                     <div className="ml-3">
-                        <span className="block text-sm font-medium text-gray-900">In Buck's Hutch</span>
+                        <span className="block text-sm font-medium text-gray-900">Buck's Hutch</span>
                         <span className="block text-xs text-gray-500">
                              {selectedSire?.currentHutchId 
-                               ? `Doe moves to ${selectedSire.currentHutchId}` 
+                               ? `${hutchMap[selectedSire.currentHutchId] || selectedSire.currentHutchId}` 
                                : "Buck has no hutch assigned"}
                         </span>
                     </div>
@@ -274,8 +261,8 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
                         className="text-gray-600 focus:ring-gray-500"
                     />
                     <div className="ml-3 flex-1">
-                        <span className="block text-sm font-medium text-gray-900">Neutral / Other Hutch</span>
-                        <span className="block text-xs text-gray-500">Both rabbits move to new location</span>
+                        <span className="block text-sm font-medium text-gray-900">Other Hutch</span>
+                        <span className="block text-xs text-gray-500">Mating happened in a different hutch</span>
                         
                         {locationType === 'neutral' && (
                             <div className="mt-2">
@@ -287,12 +274,8 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
                                 >
                                     <option value="">Select Hutch...</option>
                                     {hutches.map(h => (
-                                        <option 
-                                            key={h.id} 
-                                            value={h.hutchId}
-                                            disabled={h.currentOccupancy >= h.capacity}
-                                        >
-                                            {h.label} ({h.currentOccupancy}/{h.capacity})
+                                        <option key={h.id} value={h.hutchId}>
+                                            {h.label}
                                         </option>
                                     ))}
                                 </select>
@@ -323,7 +306,7 @@ export const CrossingFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess 
                     : 'bg-farm-600 hover:bg-farm-700'
             }`}
           >
-            {loading ? 'Recording...' : inbreedingWarning ? 'Proceed with Inbreeding' : 'Save Record & Move Rabbits'}
+            {loading ? 'Recording...' : inbreedingWarning ? 'Proceed with Inbreeding' : 'Save Mating Record'}
           </button>
         </form>
       </div>

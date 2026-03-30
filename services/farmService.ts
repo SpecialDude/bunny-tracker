@@ -1106,8 +1106,7 @@ export const FarmService = {
   },
 
   async addCrossing(
-    data: Omit<Crossing, 'id' | 'farmId' | 'status' | 'expectedDeliveryDate' | 'expectedPalpationDate'>,
-    moveConfig?: { mode: string, targetHutchId: string, doeDbId?: string, sireDbId?: string }
+    data: Omit<Crossing, 'id' | 'farmId' | 'status' | 'expectedDeliveryDate' | 'expectedPalpationDate'>
   ): Promise<void> {
     if (isDemoMode()) {
         MOCK_STORE.crossings.push({
@@ -1143,16 +1142,7 @@ export const FarmService = {
     };
 
     await docRef.set(this.cleanPayload(crossingPayload));
-
-    // Mating moves are temporary visits — always override capacity so they aren't blocked
-    if (moveConfig && moveConfig.targetHutchId) {
-        if (moveConfig.mode === 'sire_visit_doe' && moveConfig.sireDbId) await this.moveRabbit(moveConfig.sireDbId, moveConfig.targetHutchId, 'Mating', `Visiting Doe ${data.doeId}`, true);
-        else if (moveConfig.mode === 'doe_visit_sire' && moveConfig.doeDbId) await this.moveRabbit(moveConfig.doeDbId, moveConfig.targetHutchId, 'Mating', `Visiting Buck ${data.sireId}`, true);
-        else if (moveConfig.mode === 'neutral') {
-            if (moveConfig.doeDbId) await this.moveRabbit(moveConfig.doeDbId, moveConfig.targetHutchId, 'Mating', `Mating with ${data.sireId}`, true);
-            if (moveConfig.sireDbId) await this.moveRabbit(moveConfig.sireDbId, moveConfig.targetHutchId, 'Mating', `Mating with ${data.doeId}`, true);
-        }
-    }
+    // Mating is temporary — rabbits stay in their own hutches. Only the matingHutchId is recorded.
   },
 
   async syncHistoricalHutchLabels(): Promise<{ updated: number, errors: number }> {
