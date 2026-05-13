@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Loader2, Rabbit as RabbitIcon, Scale, Calendar, List, LayoutGrid, ArrowRightLeft } from 'lucide-react';
+import { ArrowLeft, Loader2, Rabbit as RabbitIcon, Scale, Calendar, List, LayoutGrid, ArrowRightLeft, RefreshCw } from 'lucide-react';
 import { Hutch, Rabbit, Sex } from '../types';
 import { FarmService } from '../services/farmService';
 import { MoveRabbitModal } from './MoveRabbitModal';
@@ -13,6 +13,7 @@ interface Props {
 export const HutchDetail: React.FC<Props> = ({ hutch, onBack }) => {
   const { showToast } = useAlert();
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [rabbits, setRabbits] = useState<Rabbit[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   
@@ -23,13 +24,13 @@ export const HutchDetail: React.FC<Props> = ({ hutch, onBack }) => {
   const loadData = async () => {
     setLoading(true);
     try {
+      // getRabbitsByHutchId now only returns active rabbits (Alive/Pregnant/Weaned)
       const data = await FarmService.getRabbitsByHutchId(hutch.hutchId);
       setRabbits(data);
       
-      // Auto-sync occupancy if mismatch is detected
+      // Auto-sync occupancy if mismatch is detected (silently)
       if (data.length !== hutch.currentOccupancy && hutch.id) {
           await FarmService.syncHutchOccupancy(hutch.id, data.length);
-          // Don't show toast to avoid spamming, but log to console
           console.log(`Auto-synced hutch ${hutch.hutchId} occupancy from ${hutch.currentOccupancy} to ${data.length}`);
       }
     } catch (e) {
@@ -37,6 +38,22 @@ export const HutchDetail: React.FC<Props> = ({ hutch, onBack }) => {
       showToast("Failed to load rabbits for this hutch", "error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFixOccupancy = async () => {
+    setSyncing(true);
+    try {
+      const data = await FarmService.getRabbitsByHutchId(hutch.hutchId);
+      setRabbits(data);
+      if (hutch.id) {
+        await FarmService.syncHutchOccupancy(hutch.id, data.length);
+      }
+      showToast(`Occupancy corrected to ${data.length} active rabbit(s).`, 'success');
+    } catch (e) {
+      showToast("Failed to fix occupancy", "error");
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -124,6 +141,15 @@ export const HutchDetail: React.FC<Props> = ({ hutch, onBack }) => {
                 <LayoutGrid size={18} />
             </button>
         </div>
+        <button
+            onClick={handleFixOccupancy}
+            disabled={syncing}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            title="Recalculate occupancy count from active rabbits"
+        >
+            <RefreshCw size={13} className={syncing ? 'animate-spin' : ''} />
+            Fix Occupancy
+        </button>
       </div>
 
       {loading ? (

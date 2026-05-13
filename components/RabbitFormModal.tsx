@@ -684,15 +684,56 @@ export const RabbitFormModal: React.FC<RabbitFormModalProps> = ({
                     
                     <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                    <select 
-                        value={formData.status}
-                        onChange={e => setFormData({...formData, status: e.target.value as any})}
-                        className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-farm-500 outline-none"
-                    >
-                        {Object.values(RabbitStatus).map(s => (
-                            <option key={s} value={s}>{s}</option>
-                        ))}
-                    </select>
+                    {(() => {
+                        const isTerminal = initialData && [RabbitStatus.Dead, RabbitStatus.Sold, RabbitStatus.Slaughtered].includes(formData.status as RabbitStatus);
+                        const isPregnant = initialData && formData.status === RabbitStatus.Pregnant;
+                        const isLocked = isTerminal || isPregnant;
+
+                        if (isLocked) {
+                            return (
+                                <div>
+                                    <div className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-600 cursor-not-allowed font-medium">
+                                        {formData.status}
+                                    </div>
+                                    <p className="text-xs text-gray-400 mt-1 italic">
+                                        {isPregnant
+                                            ? 'Status is managed by the breeding program (delivery/palpation).'
+                                            : `This rabbit is ${(formData.status || '').toLowerCase()}. Status cannot be changed.`}
+                                    </p>
+                                </div>
+                            );
+                        }
+
+                        return (
+                            <div>
+                                <div className="flex p-1 bg-gray-100 rounded-lg">
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormData({...formData, status: RabbitStatus.Alive})}
+                                        className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
+                                            formData.status === RabbitStatus.Alive ? 'bg-white shadow text-green-700' : 'text-gray-500'
+                                        }`}
+                                    >
+                                        Alive
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormData({...formData, status: RabbitStatus.Weaned})}
+                                        className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
+                                            formData.status === RabbitStatus.Weaned ? 'bg-white shadow text-yellow-700' : 'text-gray-500'
+                                        }`}
+                                    >
+                                        Weaned
+                                    </button>
+                                </div>
+                                {initialData && (
+                                    <p className="text-xs text-gray-400 mt-1 italic">
+                                        To mark as dead or slaughtered, use the 🪦 Mortality action. To sell, use the 🛒 Sale action.
+                                    </p>
+                                )}
+                            </div>
+                        );
+                    })()}
                     </div>
 
                     <div>

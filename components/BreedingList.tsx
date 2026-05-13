@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Activity, Calendar, CheckCircle2, XCircle, Baby, Loader2, Edit, ListPlus, RotateCw, Search, Filter } from 'lucide-react';
+import { Plus, Activity, Calendar, CheckCircle2, XCircle, Baby, Loader2, Edit, ListPlus, RotateCw, Search, Filter, Trash2 } from 'lucide-react';
 import { Crossing, CrossingStatus } from '../types';
 import { FarmService } from '../services/farmService';
 import { CrossingFormModal } from './CrossingFormModal';
@@ -15,8 +15,9 @@ export const BreedingList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isCrossingModalOpen, setIsCrossingModalOpen] = useState(false);
   const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
-  const [isRabbitModalOpen, setIsRabbitModalOpen] = useState(false); // For "Create Records"
+  const [isRabbitModalOpen, setIsRabbitModalOpen] = useState(false);
   const [selectedCrossing, setSelectedCrossing] = useState<Crossing | undefined>(undefined);
+  const [editingCrossing, setEditingCrossing] = useState<Crossing | undefined>(undefined);
 
   // Pagination & Filtering
   const [searchTerm, setSearchTerm] = useState('');
@@ -92,16 +93,68 @@ export const BreedingList: React.FC = () => {
     setIsDeliveryModalOpen(true);
   };
 
-  // When "Create Rabbit Records" is clicked
   const handleCreateRecords = (crossing: Crossing) => {
       setSelectedCrossing(crossing);
       setIsRabbitModalOpen(true);
   };
 
+  const handleEdit = (crossing: Crossing) => {
+    setEditingCrossing(crossing);
+    setIsCrossingModalOpen(true);
+  };
+
+  const handleDelete = async (crossing: Crossing) => {
+    const hasLinkedRecords = crossing.isRecordsCreated;
+    const confirmed = await showConfirm({
+      title: 'Delete Mating Record',
+      message: hasLinkedRecords
+        ? 'This record has linked rabbit records already created. Deleting it will NOT delete those rabbits, but the breeding history link will be lost. Are you sure?'
+        : 'Are you sure you want to delete this mating record? This cannot be undone.',
+      confirmText: 'Delete',
+      variant: 'danger'
+    });
+    if (!confirmed) return;
+
+    try {
+      await FarmService.deleteCrossing(crossing.id!);
+      showToast("Mating record deleted", 'success');
+      fetchData();
+    } catch (e: any) {
+      showToast("Failed to delete record: " + e.message, 'error');
+    }
+  };
+
+  const handleSyncNames = async () => {
+    const confirmed = await showConfirm({
+      title: 'Sync Rabbit Names',
+      message: 'This will update the doe/buck names on all mating records to match the current rabbit names. This fixes historical records that show outdated names. Continue?',
+      confirmText: 'Sync Now'
+    });
+
+    if (!confirmed) return;
+
+    setLoading(true);
+    try {
+      const result = await FarmService.syncCrossingNames();
+      showToast(
+        result.updated > 0
+          ? `Successfully updated names on ${result.updated} records.`
+          : 'All records are already up to date.',
+        'success'
+      );
+      fetchData();
+    } catch (e) {
+      console.error(e);
+      showToast("Failed to sync names", 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSyncHutches = async () => {
     const confirmed = await showConfirm({
-      title: 'Sync Historical Hutch Labels',
-      message: 'This will attempt to backfill missing hutch labels for existing records using the rabbits\' current locations. Continue?',
+      title: 'Sync Missing Hutch Labels',
+      message: 'This will fill in any blank hutch labels on existing records using the rabbits\' current locations. It will not overwrite historical labels. Continue?',
       confirmText: 'Sync Now'
     });
 
@@ -137,17 +190,28 @@ export const BreedingList: React.FC = () => {
           <h2 className="text-2xl font-bold text-gray-900">Breeding Program</h2>
           <p className="text-gray-500 text-sm">Track matings, pregnancies, and deliveries.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+            <button 
+              onClick={handleSyncNames}
+              className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50 shadow-sm transition-colors"
+              title="Update rabbit names on all mating records to match current names"
+            >
+              <RotateCw size={16} className={loading ? 'animate-spin' : ''} />
+              Sync Names
+            </button>
             <button 
               onClick={handleSyncHutches}
               className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50 shadow-sm transition-colors"
-              title="Backfill missing hutch labels for existing records"
+              title="Fill in missing hutch labels for existing records (does not overwrite historical data)"
             >
               <RotateCw size={16} className={loading ? 'animate-spin' : ''} />
-              Sync Hutch Labels
+              Sync Labels
             </button>
             <button 
-              onClick={() => setIsCrossingModalOpen(true)}
+              onClick={() => {
+                setEditingCrossing(undefined);
+                setIsCrossingModalOpen(true);
+              }}
               className="flex items-center gap-2 px-4 py-2 bg-farm-600 text-white rounded-lg text-sm font-medium hover:bg-farm-700 shadow-sm transition-colors"
             >
               <Plus size={16} />
@@ -227,11 +291,19 @@ export const BreedingList: React.FC = () => {
                       <div className="font-medium text-gray-900 flex flex-col gap-0.5">
                         <div className="flex items-center gap-2">
                           <span className="text-pink-600 font-bold">♀ {cross.doeName || cross.doeId}</span>
-                          {cross.doeHutchLabel && <span className="text-[10px] bg-pink-50 text-pink-700 px-1.5 py-0.5 rounded border border-pink-100">{cross.doeHutchLabel}</span>}
+                          {cross.doeHutchLabel && (
+                            <span className="text-[10px] bg-pink-50 text-pink-700 px-1.5 py-0.5 rounded border border-pink-100" title="Hutch at time of mating">
+                              {cross.doeHutchLabel}
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-blue-600 font-bold">♂ {cross.sireName || cross.sireId}</span>
-                          {cross.sireHutchLabel && <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-100">{cross.sireHutchLabel}</span>}
+                          {cross.sireHutchLabel && (
+                            <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-100" title="Hutch at time of mating">
+                              {cross.sireHutchLabel}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -272,7 +344,8 @@ export const BreedingList: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex justify-end items-center gap-1.5">
+                        {/* Status-transition actions */}
                         {cross.status === CrossingStatus.Pending && (
                           <>
                             <button 
@@ -300,7 +373,7 @@ export const BreedingList: React.FC = () => {
                            </button>
                         )}
                         {cross.status === CrossingStatus.Delivered && (
-                            <div className="flex gap-2">
+                            <div className="flex gap-1.5">
                                 <button
                                     onClick={() => handleDelivery(cross)}
                                     className="p-1.5 text-gray-500 hover:bg-gray-100 rounded border border-gray-200"
@@ -327,6 +400,25 @@ export const BreedingList: React.FC = () => {
                                 )}
                             </div>
                         )}
+
+                        {/* Divider */}
+                        <div className="w-px h-5 bg-gray-200 mx-0.5" />
+
+                        {/* Edit & Delete — always available */}
+                        <button
+                          onClick={() => handleEdit(cross)}
+                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded border border-transparent hover:border-blue-200"
+                          title="Edit mating record"
+                        >
+                          <Edit size={15} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(cross)}
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded border border-transparent hover:border-red-200"
+                          title="Delete mating record"
+                        >
+                          <Trash2 size={15} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -350,10 +442,15 @@ export const BreedingList: React.FC = () => {
         )}
       </div>
 
+      {/* Create / Edit Crossing Modal */}
       <CrossingFormModal 
         isOpen={isCrossingModalOpen}
-        onClose={() => setIsCrossingModalOpen(false)}
+        onClose={() => {
+          setIsCrossingModalOpen(false);
+          setEditingCrossing(undefined);
+        }}
         onSuccess={fetchData}
+        initialData={editingCrossing}
       />
       
       {selectedCrossing && (
