@@ -2,7 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Rabbit, AlertTriangle, ExternalLink, Info, PlayCircle, Mail, Lock, User, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
-export const Login: React.FC = () => {
+interface LoginProps {
+  onBackToLanding?: () => void;
+}
+
+export const Login: React.FC<LoginProps> = ({ onBackToLanding }) => {
   const { signInWithGoogle, signInWithEmail, signUpWithEmail, enterDemoMode } = useAuth();
   
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
@@ -100,6 +104,14 @@ export const Login: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 space-y-6">
+        {onBackToLanding && (
+          <button
+            onClick={onBackToLanding}
+            className="flex items-center gap-1 text-sm text-gray-500 hover:text-farm-600 transition-colors -mb-2"
+          >
+            ← Back to Home
+          </button>
+        )}
         <div className="text-center">
           <div className="inline-flex p-4 bg-farm-100 rounded-full mb-4">
             <Rabbit size={48} className="text-farm-600" />

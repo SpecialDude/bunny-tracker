@@ -13,13 +13,17 @@ import { AlertProvider } from './contexts/AlertContext';
 import { FarmProvider } from './contexts/FarmContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { Login } from './components/Login';
+import { LandingPage } from './components/LandingPage';
 import { Loader2 } from 'lucide-react';
 import { FarmService } from './services/farmService';
 
 const AppContent = () => {
   const [activePage, setActivePage] = useState('dashboard');
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, enterDemoMode } = useAuth();
   
+  // Landing page vs Login toggle for unauthenticated users
+  const [showLanding, setShowLanding] = useState(true);
+
   // Farm check state
   const [hasFarm, setHasFarm] = useState<boolean | null>(null);
   const [checkingFarm, setCheckingFarm] = useState(false);
@@ -56,7 +60,19 @@ const AppContent = () => {
   }
 
   if (!user) {
-    return <Login />;
+    // Show landing page or login based on user action
+    if (showLanding) {
+      return (
+        <LandingPage 
+          onGetStarted={() => setShowLanding(false)} 
+          onDemo={() => {
+            enterDemoMode();
+            setShowLanding(false);
+          }}
+        />
+      );
+    }
+    return <Login onBackToLanding={() => setShowLanding(true)} />;
   }
 
   // If user is logged in but hasn't set up a farm yet
