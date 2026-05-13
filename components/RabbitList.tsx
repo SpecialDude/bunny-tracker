@@ -24,7 +24,10 @@ export const RabbitList: React.FC<Props> = () => {
   const [rabbits, setRabbits] = useState<Rabbit[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('All');
+  const ACTIVE_STATUSES = [RabbitStatus.Alive, RabbitStatus.Pregnant, RabbitStatus.Weaned];
+  const INACTIVE_STATUSES = [RabbitStatus.Sold, RabbitStatus.Dead, RabbitStatus.Slaughtered];
+
+  const [filterStatus, setFilterStatus] = useState<string>('Active');
   
   // Sorting State
   const [sortField, setSortField] = useState<SortField>('tag');
@@ -146,7 +149,14 @@ export const RabbitList: React.FC<Props> = () => {
         (r.name && r.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
         r.breed.toLowerCase().includes(searchTerm.toLowerCase());
       
-      const matchesFilter = filterStatus === 'All' || r.status === filterStatus;
+      let matchesFilter: boolean;
+      if (filterStatus === 'All') {
+        matchesFilter = true;
+      } else if (filterStatus === 'Active') {
+        matchesFilter = ACTIVE_STATUSES.includes(r.status as RabbitStatus);
+      } else {
+        matchesFilter = r.status === filterStatus;
+      }
 
       return matchesSearch && matchesFilter;
     });
@@ -241,19 +251,20 @@ export const RabbitList: React.FC<Props> = () => {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
           <input
             type="text"
-            placeholder="Search by Tag, Breed, or ID..."
+            placeholder="Search by Tag, Name, or Breed..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-farm-500 text-sm"
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           <div className="relative">
             <select 
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
               className="appearance-none pl-10 pr-8 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-farm-500"
             >
+              <option value="Active">Active Only</option>
               <option value="All">All Status</option>
               {Object.values(RabbitStatus).map(s => (
                 <option key={s} value={s}>{s}</option>
@@ -261,6 +272,19 @@ export const RabbitList: React.FC<Props> = () => {
             </select>
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
           </div>
+          {/* Show inactive count hint when on Active filter */}
+          {filterStatus === 'Active' && (() => {
+            const inactiveCount = rabbits.filter(r => INACTIVE_STATUSES.includes(r.status as RabbitStatus)).length;
+            return inactiveCount > 0 ? (
+              <button
+                onClick={() => setFilterStatus('All')}
+                className="text-xs text-gray-400 hover:text-gray-600 whitespace-nowrap underline underline-offset-2"
+                title="Show all rabbits including inactive"
+              >
+                +{inactiveCount} inactive hidden
+              </button>
+            ) : null;
+          })()}
         </div>
       </div>
 
@@ -304,8 +328,10 @@ export const RabbitList: React.FC<Props> = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {paginatedRabbits.map((rabbit) => (
-                  <tr key={rabbit.id} className="hover:bg-gray-50 transition-colors">
+                {paginatedRabbits.map((rabbit) => {
+                  const isInactive = INACTIVE_STATUSES.includes(rabbit.status as RabbitStatus);
+                  return (
+                  <tr key={rabbit.id} className={`transition-colors ${isInactive ? 'bg-gray-50/60 opacity-60 hover:opacity-100' : 'hover:bg-gray-50'}`}>
                     <td className="px-6 py-4">
                       <div className="font-medium text-gray-900">{rabbit.tag}</div>
                       {rabbit.name && <div className="text-xs text-gray-400">{rabbit.name}</div>}
@@ -373,7 +399,8 @@ export const RabbitList: React.FC<Props> = () => {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

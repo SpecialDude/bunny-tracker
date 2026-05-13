@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, User, Settings as SettingsIcon, Database, Download, AlertTriangle, Loader2, List, Trash2, Plus, DollarSign, Lock, ShieldCheck, FileSpreadsheet, CheckSquare, Square } from 'lucide-react';
+import { Save, User, Settings as SettingsIcon, Database, Download, AlertTriangle, Loader2, List, Trash2, Plus, DollarSign, Lock, ShieldCheck, FileSpreadsheet, CheckSquare, Square, Wrench } from 'lucide-react';
 import { FarmService } from '../services/farmService';
 import { Farm } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -14,6 +14,7 @@ export const Settings: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [auditing, setAuditing] = useState(false);
   const [activeTab, setActiveTab] = useState<'general' | 'biological' | 'breeds' | 'financials' | 'security' | 'data'>('general');
   const [farmSettings, setFarmSettings] = useState<Farm | null>(null);
 
@@ -392,6 +393,31 @@ export const Settings: React.FC = () => {
       medical: newState,
       customers: newState
     });
+  };
+
+  const handleAuditOccupancy = async () => {
+    const confirmed = await showConfirm({
+      title: 'Audit Hutch Occupancy',
+      message: 'This will scan all hutches and correct any occupancy counts that are out of sync with the actual active rabbits. Safe to run at any time. Continue?',
+      confirmText: 'Run Audit'
+    });
+    if (!confirmed) return;
+
+    setAuditing(true);
+    try {
+      const result = await FarmService.auditHutchOccupancy();
+      showToast(
+        result.corrected > 0
+          ? `Audit complete. Corrected ${result.corrected} of ${result.audited} hutch(es).`
+          : `Audit complete. All ${result.audited} hutch(es) are already in sync.`,
+        'success'
+      );
+    } catch (error) {
+      console.error(error);
+      showToast("Audit failed. Please try again.", 'error');
+    } finally {
+      setAuditing(false);
+    }
   };
 
   const handleResetAccount = async () => {
@@ -877,6 +903,32 @@ export const Settings: React.FC = () => {
                   >
                     <Database size={16} /> Download JSON
                   </button>
+                </div>
+              </div>
+
+              {/* Maintenance Tools */}
+              <div className="border border-amber-200 rounded-lg p-4 bg-amber-50">
+                <h4 className="text-base font-bold text-amber-800 flex items-center gap-2 mb-1">
+                  <Wrench size={18} /> Maintenance Tools
+                </h4>
+                <p className="text-sm text-amber-700 mb-4">
+                  Use these tools to repair data inconsistencies. They are safe to run at any time and will not delete any records.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="flex-1 bg-white border border-amber-100 rounded-lg p-4">
+                    <h5 className="font-semibold text-gray-800 text-sm mb-1">Audit Hutch Occupancy</h5>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Scans all hutches and corrects occupancy counts that are out of sync with actual active rabbits. Fixes the issue where slaughtered or sold rabbits still appear to occupy a hutch.
+                    </p>
+                    <button
+                      onClick={handleAuditOccupancy}
+                      disabled={auditing}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 disabled:opacity-50"
+                    >
+                      {auditing ? <Loader2 className="animate-spin" size={14} /> : <Wrench size={14} />}
+                      {auditing ? 'Running...' : 'Run Audit'}
+                    </button>
+                  </div>
                 </div>
               </div>
 
